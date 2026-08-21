@@ -1,0 +1,9 @@
+.DS_Store
+.build/
+DerivedData/
+*.xcodeproj
+!default.xcodeproj
+xcuserdata/
+*.xcuserstate
+SimplePresenter/Info.plist
+.swiftpm/

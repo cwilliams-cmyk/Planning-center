@@ -1,0 +1,29 @@
+# XcodeGen configuration. Run `xcodegen` in this folder to generate
+# SimplePresenter.xcodeproj, then open it in Xcode and press Run.
+name: SimplePresenter
+options:
+  bundleIdPrefix: org.ironoakchurch
+  deploymentTarget:
+    macOS: "13.0"
+targets:
+  SimplePresenter:
+    type: application
+    platform: macOS
+    sources:
+      - SimplePresenter
+    info:
+      path: SimplePresenter/Info.plist
+      properties:
+        CFBundleDisplayName: SimplePresenter
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        LSApplicationCategoryType: public.app-category.video
+        NSHumanReadableCopyright: ""
+        NSHighResolutionCapable: true
+    settings:
+      base:
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_HARDENED_RUNTIME: NO
+        ENABLE_APP_SANDBOX: NO
+        SWIFT_VERSION: "5.9"
+        MACOSX_DEPLOYMENT_TARGET: "13.0"
