@@ -301,6 +301,23 @@ test('integration: modes, connection states, coalescing, watchdog', { timeout: 6
     const during = mock.received.slice(before);
     assert.ok(during.some((p) => isPresetRecall(p, 80)), 'preset-method on must recall preset 80');
     assert.ok(during.some((p) => isPresetRecall(p, 81)), 'preset-method off must recall preset 81');
+
+    // Custom method: operator-supplied bytes (e.g. from a web-UI capture).
+    assert.equal((await req(base, 'PATCH', '/api/cameras/127.0.0.1',
+      { trackingMethod: 'custom' })).status, 400, 'custom without bytes must be rejected');
+    assert.equal((await req(base, 'PATCH', '/api/cameras/127.0.0.1',
+      { trackingMethod: 'custom', trackingCustom: { on: 'zznothex', off: 'ff' } })).status, 400);
+    assert.equal((await req(base, 'PATCH', '/api/cameras/127.0.0.1',
+      { trackingMethod: 'custom', trackingCustom: { on: '81deadbeefff', off: '81feedface00ff' } })).status, 200);
+    before = mock.received.length;
+    await req(base, 'POST', '/api/camera/127.0.0.1/ptz', { action: 'tracking', on: true });
+    await req(base, 'POST', '/api/camera/127.0.0.1/ptz', { action: 'tracking', on: false });
+    await tick(300);
+    const customSeen = mock.received.slice(before);
+    assert.ok(customSeen.some((p) => Buffer.from(p.payload).toString('hex') === '81deadbeefff'),
+      'custom on bytes must be sent verbatim');
+    assert.ok(customSeen.some((p) => Buffer.from(p.payload).toString('hex') === '81feedface00ff'),
+      'custom off bytes must be sent verbatim');
     await req(base, 'PATCH', '/api/cameras/127.0.0.1', { trackingMethod: 'visca' });
   });
 

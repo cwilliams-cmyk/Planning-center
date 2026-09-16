@@ -136,6 +136,16 @@ function validPresetOrder(order) {
   return Array.isArray(order) && order.length === 9 &&
     [...order].sort((a, b) => a - b).every((v, i) => v === i + 1);
 }
+/**
+ * Custom tracking command bytes (per camera): { on, off } as hex strings,
+ * e.g. from Hollyland support or a capture of the camera's own web UI.
+ * Kept small and even-length; sent verbatim on the control port only.
+ */
+const HEX_RE = /^([0-9a-fA-F]{2}){2,32}$/;
+function validTrackingCustom(tc) {
+  return !!tc && typeof tc === 'object' &&
+    HEX_RE.test(String(tc.on || '')) && HEX_RE.test(String(tc.off || ''));
+}
 
 function loadConfig() {
   let raw;
@@ -157,7 +167,8 @@ function loadConfig() {
           source: c.source || 'saved',
           disabled: !!c.disabled,
           freezeOnRecall: !!c.freezeOnRecall,
-          trackingMethod: c.trackingMethod === 'preset' ? 'preset' : 'visca',
+          trackingMethod: ['preset', 'custom'].includes(c.trackingMethod) ? c.trackingMethod : 'visca',
+          trackingCustom: validTrackingCustom(c.trackingCustom) ? c.trackingCustom : undefined,
           presets: c.presets && typeof c.presets === 'object' ? c.presets : {},
           presetOrder: validPresetOrder(c.presetOrder) ? c.presetOrder : [...DEFAULT_PRESET_ORDER],
         });
@@ -202,6 +213,7 @@ function addCamera({ ip, name, protocol, port, rtsp, source }) {
     disabled: existing ? !!existing.disabled : false,
     freezeOnRecall: existing ? !!existing.freezeOnRecall : false,
     trackingMethod: (existing && existing.trackingMethod) || 'visca',
+    trackingCustom: (existing && existing.trackingCustom) || undefined,
     presets: (existing && existing.presets) || {},
     presetOrder: (existing && existing.presetOrder) || [...DEFAULT_PRESET_ORDER],
   };
@@ -323,9 +335,14 @@ function dispatchPTZ(camera, body) {
   // picks the one this camera honors (verify in Setup before a service).
   if (body.action === 'tracking') {
     const on = body.on !== false;
-    const payload = camera.trackingMethod === 'preset'
-      ? cmd.preset('recall', on ? 80 : 81)
-      : cmd.tracking(on);
+    let payload;
+    if (camera.trackingMethod === 'custom' && validTrackingCustom(camera.trackingCustom)) {
+      payload = Buffer.from(on ? camera.trackingCustom.on : camera.trackingCustom.off, 'hex');
+    } else if (camera.trackingMethod === 'preset') {
+      payload = cmd.preset('recall', on ? 80 : 81);
+    } else {
+      payload = cmd.tracking(on);
+    }
     // Turning tracking on makes queued manual movement obsolete; turning it
     // off must land reliably so the operator can take manual control. Both
     // ride the never-dropped stop lane.
@@ -517,10 +534,19 @@ const server = http.createServer(async (req, res) => {
         }
         if (body.freezeOnRecall !== undefined) camera.freezeOnRecall = !!body.freezeOnRecall;
         if (body.trackingMethod !== undefined) {
-          if (!['visca', 'preset'].includes(body.trackingMethod)) {
-            return json(res, 400, { error: 'trackingMethod must be "visca" or "preset"' });
+          if (!['visca', 'preset', 'custom'].includes(body.trackingMethod)) {
+            return json(res, 400, { error: 'trackingMethod must be "visca", "preset", or "custom"' });
+          }
+          if (body.trackingMethod === 'custom' && !validTrackingCustom(body.trackingCustom || camera.trackingCustom)) {
+            return json(res, 400, { error: 'custom tracking needs on/off command bytes as hex (e.g. "810a115402ff")' });
           }
           camera.trackingMethod = body.trackingMethod;
+        }
+        if (body.trackingCustom !== undefined) {
+          if (body.trackingCustom !== null && !validTrackingCustom(body.trackingCustom)) {
+            return json(res, 400, { error: 'trackingCustom must be { on, off } hex strings (2-32 bytes each)' });
+          }
+          camera.trackingCustom = body.trackingCustom || undefined;
         }
         saveConfig();
         return json(res, 200, { camera });

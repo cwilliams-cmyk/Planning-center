@@ -213,6 +213,7 @@ function buildTile(cam) {
         <select>
           <option value="visca">Extended VISCA (default)</option>
           <option value="preset">Recall preset 80/81</option>
+          <option value="custom">Custom bytes…</option>
         </select>
       </label>
     </div>`;
@@ -266,7 +267,17 @@ function buildTile(cam) {
   const method = tile.querySelector('.tracking-method select');
   method.addEventListener('click', (e) => e.stopPropagation());
   method.addEventListener('change', async (e) => {
-    await api(`/api/cameras/${cam.ip}`, { method: 'PATCH', body: JSON.stringify({ trackingMethod: e.target.value }) });
+    const value = e.target.value;
+    const patch = { trackingMethod: value };
+    if (value === 'custom') {
+      const current = (state.cameras.find((c) => c.ip === cam.ip) || {}).trackingCustom || {};
+      const on = prompt('Tracking ON command bytes (hex, from Hollyland docs/support or a capture of the camera web UI):', current.on || '810a115402ff');
+      if (!on) { refresh(); return; }
+      const off = prompt('Tracking OFF command bytes (hex):', current.off || '810a115403ff');
+      if (!off) { refresh(); return; }
+      patch.trackingCustom = { on: on.replace(/\s/g, ''), off: off.replace(/\s/g, '') };
+    }
+    await api(`/api/cameras/${cam.ip}`, { method: 'PATCH', body: JSON.stringify(patch) });
     refresh();
   });
   tile.querySelector('.tracking-method').addEventListener('click', (e) => e.stopPropagation());
