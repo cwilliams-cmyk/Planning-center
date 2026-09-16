@@ -2,12 +2,46 @@
   "name": "astra-ptz-control",
   "version": "1.0.0",
   "description": "Multi-camera dashboard and unified PTZ control for Hollyland Astra (VISCA over IP) cameras",
-  "main": "server.js",
+  "main": "electron/main.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "app": "electron .",
+    "dist": "electron-builder --mac"
   },
   "engines": {
     "node": ">=18"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "ffmpeg-static": "^5.2.0"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "org.ironoakchurch.astraptzcontrol",
+    "productName": "Astra PTZ Control",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**",
+      "server.js",
+      "lib/**",
+      "public/**",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**"
+    ],
+    "mac": {
+      "category": "public.app-category.video",
+      "target": [
+        { "target": "dmg" },
+        { "target": "zip" }
+      ]
+    }
+  }
 }

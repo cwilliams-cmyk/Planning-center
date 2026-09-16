@@ -10,13 +10,29 @@
  * Astra P1 main stream: rtsp://<ip>:554/live/av0  (sub stream: /live/av1)
  */
 
+const fs = require('fs');
 const { spawn, spawnSync } = require('child_process');
 
 const BOUNDARY = 'ffmpeg'; // ffmpeg's mpjpeg muxer default boundary
 
-function ffmpegAvailable() {
+/** Prefer a bundled ffmpeg-static binary (Electron app), else the system one. */
+function resolveFfmpeg() {
   try {
-    return spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0;
+    // Inside a packaged Electron app the binary lives in app.asar.unpacked.
+    let p = require('ffmpeg-static');
+    if (p) {
+      p = p.replace(/app\.asar([/\\])/, 'app.asar.unpacked$1');
+      if (fs.existsSync(p)) return p;
+    }
+  } catch {
+    /* ffmpeg-static not installed: plain `node server.js` usage */
+  }
+  return 'ffmpeg';
+}
+
+function ffmpegAvailable(bin) {
+  try {
+    return spawnSync(bin, ['-version'], { stdio: 'ignore' }).status === 0;
   } catch {
     return false;
   }
@@ -25,7 +41,8 @@ function ffmpegAvailable() {
 class StreamHub {
   constructor() {
     this.relays = new Map(); // ip -> { proc, clients:Set<res>, stopTimer }
-    this.available = ffmpegAvailable();
+    this.ffmpeg = resolveFfmpeg();
+    this.available = ffmpegAvailable(this.ffmpeg);
   }
 
   rtspUrl(camera) {
@@ -76,7 +93,7 @@ class StreamHub {
       '-f', 'mpjpeg',
       'pipe:1',
     ];
-    const proc = spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'ignore'] });
+    const proc = spawn(this.ffmpeg, args, { stdio: ['ignore', 'pipe', 'ignore'] });
     relay.proc = proc;
 
     proc.stdout.on('data', (chunk) => {

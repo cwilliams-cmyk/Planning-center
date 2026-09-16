@@ -25,7 +25,7 @@ const argVal = (name, dflt) => {
 };
 const PORT = parseInt(argVal('--port', process.env.PORT || '8300'), 10);
 const AUTOSCAN = !args.includes('--no-autoscan');
-const CONFIG_FILE = path.join(__dirname, 'cameras.json');
+let CONFIG_FILE = path.join(__dirname, 'cameras.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
 const visca = new ViscaClient();
@@ -275,24 +275,60 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-loadConfig();
-server.listen(PORT, () => {
-  console.log(`\nAstra PTZ Control running at  http://localhost:${PORT}\n`);
-  if (!streams.available) {
-    console.log('NOTE: ffmpeg not found on PATH - PTZ control will work, but video');
-    console.log('      previews are disabled. Install ffmpeg to enable multiview.\n');
-  }
-  pollStatus();
-  if (AUTOSCAN) {
-    console.log(`Auto-scanning subnets: ${discovery.localSubnets().join(', ') || '(none found)'}`);
-    runScan();
-    setInterval(() => runScan(), 5 * 60 * 1000).unref();
-  }
-});
+/**
+ * Start the server. Used both by the CLI below and by the Electron app.
+ * Falls back to an OS-assigned port if the requested one is taken.
+ * @returns {Promise<{server: http.Server, port: number}>}
+ */
+function startServer({ port = PORT, autoscan = AUTOSCAN, configFile } = {}) {
+  if (configFile) CONFIG_FILE = configFile;
+  loadConfig();
+  return new Promise((resolve, reject) => {
+    const tryListen = (p, allowFallback) => {
+      const onError = (err) => {
+        server.removeListener('listening', onListening);
+        if (allowFallback && err.code === 'EADDRINUSE') tryListen(0, false);
+        else reject(err);
+      };
+      const onListening = () => {
+        server.removeListener('error', onError);
+        const actual = server.address().port;
+        console.log(`\nAstra PTZ Control running at  http://localhost:${actual}\n`);
+        if (!streams.available) {
+          console.log('NOTE: ffmpeg not found - PTZ control will work, but video');
+          console.log('      previews are disabled. Install ffmpeg to enable multiview.\n');
+        }
+        pollStatus();
+        if (autoscan) {
+          console.log(`Auto-scanning subnets: ${discovery.localSubnets().join(', ') || '(none found)'}`);
+          runScan();
+          setInterval(() => runScan(), 5 * 60 * 1000).unref();
+        }
+        resolve({ server, port: actual });
+      };
+      server.once('error', onError);
+      server.once('listening', onListening);
+      server.listen(p);
+    };
+    tryListen(port, true);
+  });
+}
 
-process.on('SIGINT', () => {
+function shutdown() {
   if (saveTimer) { clearTimeout(saveTimer); writeConfigNow(); }
   streams.stopAll();
   visca.close();
-  process.exit(0);
-});
+}
+
+module.exports = { startServer, shutdown };
+
+if (require.main === module) {
+  startServer().catch((err) => {
+    console.error(`Failed to start: ${err.message}`);
+    process.exit(1);
+  });
+  process.on('SIGINT', () => {
+    shutdown();
+    process.exit(0);
+  });
+}

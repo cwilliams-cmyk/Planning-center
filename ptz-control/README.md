@@ -15,26 +15,38 @@ VISCA-over-IP camera). One browser window gives you:
   iris priority, bright), iris/shutter/gain/brightness stepping, white
   balance modes, and backlight compensation.
 
-## Requirements
+## Download the Mac app (easiest)
 
-- [Node.js](https://nodejs.org) 18+ (no npm packages needed)
-- [ffmpeg](https://ffmpeg.org) on your PATH — only needed for the video
-  previews; PTZ control works without it. On a Mac: `brew install ffmpeg`
-- The computer must be on the same network/VLAN as the cameras
+Every push to this folder builds a ready-to-use macOS app via GitHub
+Actions. Grab it from the repo's **Releases** page (release
+`ptz-control-latest`):
 
-## Run it
+- Apple Silicon Mac (M1/M2/M3/M4, 2020+): `…-apple-silicon.dmg`
+- Intel Mac: `…-intel.dmg`
 
-**On a Mac**, just double-click **`Astra PTZ Control.command`** — it starts
-the server and opens the dashboard in your browser. (First time, macOS may
-block it: right-click → Open → Open, or allow it under System Settings →
-Privacy & Security. Leave the Terminal window open while using the app.)
+Open the `.dmg`, drag **Astra PTZ Control** to **Applications**, then
+**right-click → Open → Open** on first launch (the app isn't notarized
+with Apple). If macOS refuses with a "damaged" warning, run once:
+`xattr -cr "/Applications/Astra PTZ Control.app"` and open again.
 
-Or from a terminal on any platform:
+The app bundles everything — no browser, Terminal, Node, or ffmpeg needed.
+
+## Or run from source
+
+Requires [Node.js](https://nodejs.org) 18+; video previews also want
+[ffmpeg](https://ffmpeg.org) on your PATH (`brew install ffmpeg`). The
+computer must be on the same network/VLAN as the cameras.
+
+On a Mac, double-click **`Astra PTZ Control.command`** — it starts the
+server and opens the dashboard in your browser. Or from a terminal:
 
 ```sh
 cd ptz-control
 node server.js            # then open http://localhost:8300
 ```
+
+To develop on the Electron app itself: `npm install`, then `npm run app`
+(window mode) or `npm run dist` (build the .dmg locally).
 
 Options:
 
