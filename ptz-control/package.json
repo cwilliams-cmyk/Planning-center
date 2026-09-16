@@ -1,0 +1,13 @@
+{
+  "name": "astra-ptz-control",
+  "version": "1.0.0",
+  "description": "Multi-camera dashboard and unified PTZ control for Hollyland Astra (VISCA over IP) cameras",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

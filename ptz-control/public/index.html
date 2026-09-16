@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Astra PTZ Control</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>Astra PTZ Control</h1>
+  <div class="header-actions">
+    <span id="scan-status"></span>
+    <button id="btn-scan" title="Probe the local network for VISCA cameras">Scan network</button>
+    <button id="btn-add" title="Add a camera by IP address">+ Add camera</button>
+  </div>
+</header>
+
+<main>
+  <!-- Multiview: every camera, live -->
+  <section id="multiview">
+    <div id="grid" class="grid"></div>
+    <p id="empty-hint" class="hint" hidden>
+      No cameras yet. Power on your Astra cameras (same network as this computer),
+      then click <b>Scan network</b> — they'll be found automatically.
+    </p>
+    <p id="ffmpeg-hint" class="hint warn" hidden>
+      ffmpeg was not found on this computer, so video previews are disabled.
+      PTZ control still works. Install ffmpeg and restart the server to see video.
+    </p>
+  </section>
+
+  <!-- Unified control panel -->
+  <aside id="controls">
+    <div class="target-row">
+      <span class="label">Controlling</span>
+      <div id="target-name" class="target-name">—</div>
+      <label class="all-toggle" title="Send commands to every camera at once">
+        <input type="checkbox" id="all-toggle"> ALL
+      </label>
+    </div>
+
+    <div class="dpad">
+      <button data-dir="upleft">↖</button>
+      <button data-dir="up">↑</button>
+      <button data-dir="upright">↗</button>
+      <button data-dir="left">←</button>
+      <button id="btn-home" title="Return to home position">⌂</button>
+      <button data-dir="right">→</button>
+      <button data-dir="downleft">↙</button>
+      <button data-dir="down">↓</button>
+      <button data-dir="downright">↘</button>
+    </div>
+
+    <div class="rockers">
+      <div class="rocker">
+        <span class="label">Zoom</span>
+        <button data-zoom="wide">−</button>
+        <button data-zoom="tele">+</button>
+      </div>
+      <div class="rocker">
+        <span class="label">Focus</span>
+        <button data-focus="near">−</button>
+        <button data-focus="far">+</button>
+        <button id="btn-af" title="Auto focus">AF</button>
+      </div>
+    </div>
+
+    <div class="speed-row">
+      <span class="label">Speed</span>
+      <input type="range" id="speed" min="1" max="24" value="12">
+      <span id="speed-val">12</span>
+    </div>
+
+    <div class="presets">
+      <div class="presets-head">
+        <span class="label">Presets</span>
+        <label title="While on, pressing a preset saves the current position to it">
+          <input type="checkbox" id="preset-set-mode"> set mode
+        </label>
+      </div>
+      <div class="preset-grid" id="preset-grid"></div>
+    </div>
+
+    <p class="hint keys">
+      Keyboard: arrows = pan/tilt &nbsp; +/− = zoom &nbsp; 1–9 = recall preset &nbsp; H = home
+    </p>
+  </aside>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>

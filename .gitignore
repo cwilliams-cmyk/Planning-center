@@ -7,3 +7,6 @@ xcuserdata/
 *.xcuserstate
 SimplePresenter/Info.plist
 .swiftpm/
+
+# PTZ control app runtime config (per-installation camera list)
+ptz-control/cameras.json
