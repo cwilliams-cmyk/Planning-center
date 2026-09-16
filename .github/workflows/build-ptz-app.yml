@@ -13,15 +13,22 @@ on:
 permissions:
   contents: write
 
+# Only the newest push matters: cancel superseded queued/in-progress builds
+# so retired-runner queues can never pile up behind each other.
+concurrency:
+  group: build-ptz-app
+  cancel-in-progress: true
+
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: macos-14 # Apple Silicon runner
             arch: arm64
             label: apple-silicon
-          - os: macos-13 # Intel runner
+          - os: macos-15-intel # last available Intel runner image
             arch: x64
             label: intel
     runs-on: ${{ matrix.os }}
@@ -55,20 +62,13 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: astra-ptz-control-${{ matrix.label }}
+          name: ptz-control-${{ matrix.label }}
           path: |
             ptz-control/dist/*.dmg
             ptz-control/dist/*.zip
 
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: dist
-          merge-multiple: true
-
+      # Each architecture publishes its own files as soon as it is built, so
+      # the Apple Silicon download is never held up by the Intel runner.
       - name: Publish downloadable release
         uses: softprops/action-gh-release@v2
         with:
@@ -92,5 +92,7 @@ jobs:
             Node, or ffmpeg. It starts in Live Control mode (safe,
             control-only); switch to Setup mode before service to scan for
             cameras and edit presets.
-          files: dist/*
+          files: |
+            ptz-control/dist/*.dmg
+            ptz-control/dist/*.zip
           prerelease: false
