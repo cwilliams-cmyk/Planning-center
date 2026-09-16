@@ -87,6 +87,18 @@
       </div>
     </div>
 
+    <div class="tracking-row">
+      <div class="tracking-head">
+        <span class="label">AI Tracking</span>
+        <span id="tracking-state" aria-live="polite">—</span>
+      </div>
+      <button id="btn-track-toggle"
+        title="Turns the camera's AI subject tracking on or off. While tracking is active the camera ignores manual pan/tilt. Verify tracking control on your camera in Setup mode before relying on it in a service.">Start AI Tracking</button>
+    </div>
+    <div id="tracking-banner" class="lock-banner" hidden>
+      Tracking Active — manual pan/tilt unavailable. Zoom, presets, and Stop still work.
+    </div>
+
     <div class="focus-mode-row">
       <span class="label">Focus mode</span>
       <div class="mode-switch small" role="group" aria-label="Focus mode">

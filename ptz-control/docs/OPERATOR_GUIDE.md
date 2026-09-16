@@ -70,10 +70,32 @@ Focus: leave **Auto** on unless you have a reason not to. If you switch to
   useful if you need to step away.
 - Worried a camera is moving when it shouldn't? Press **Space** — stop is
   sent to every camera.
-- **Camera ignores pan/tilt?** If AI Tracking is turned on (from the
-  camera's own remote or web page), the Astra P1 ignores manual pan/tilt by
-  design. Turn tracking off on the camera to take manual control. PTZ
-  Control never changes tracking settings itself.
+- **Camera ignores pan/tilt?** If AI Tracking was turned on from the
+  camera's own remote or web page (so this app doesn't know), the Astra P1
+  ignores manual pan/tilt by design. Press **Stop Tracking & Take Manual
+  Control** in the panel, or turn tracking off on the camera.
+
+## AI Tracking
+
+The **AI Tracking** section in the control panel starts and stops the
+camera's subject tracking:
+
+- **Start AI Tracking** — the camera follows the subject on its own. The
+  panel shows **Tracking Active**, and the pan/tilt pad is locked because
+  the camera ignores manual pan/tilt while tracking (zoom, presets, and
+  Stop still work).
+- **Stop Tracking & Take Manual Control** — one click returns the camera
+  to you.
+- Recalling a preset while tracking asks first, then stops tracking and
+  recalls.
+- **Test it before service** (Setup mode): if Start AI Tracking has no
+  effect on your camera, open the camera tile's settings in Setup mode and
+  switch **Tracking command** to *Recall preset 80/81*, then test again.
+  (Hollyland hasn't published the P1's command list, so PTZ Control
+  supports both conventions used by cameras of this type. If you use the
+  preset method, don't save your own shots into presets 80/81.)
+- Choosing *Presenter* vs *Zone* tracking and drawing zones (up to four)
+  is done once, in the camera's own web page — before service.
 
 ## Nice extras (Setup mode)
 

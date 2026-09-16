@@ -270,6 +270,28 @@ body.locked #btn-home { opacity: .4; pointer-events: none; }
   gap: 10px; margin-bottom: 10px;
 }
 
+/* ---- AI tracking ---- */
+.tracking-row { margin-bottom: 10px; }
+.tracking-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+#tracking-state { font-size: 12px; font-weight: 700; color: var(--muted); }
+body.tracking-active #tracking-state { color: var(--warn); }
+#btn-track-toggle { width: 100%; }
+body.tracking-active #btn-track-toggle { border-color: var(--warn); color: var(--warn); font-weight: 600; }
+/* While tracking is active, pan/tilt controls are locked (the camera
+   ignores them) - shown as locked instead of appearing to work. */
+body.tracking-active .dpad button[data-dir],
+body.tracking-active #btn-home { opacity: .35; }
+.tracking-method { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.tracking-method select {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 3px 5px;
+  font: inherit;
+  font-size: 12px;
+}
+
 /* ---- Image / exposure panel ---- */
 .image-panel {
   background: var(--panel-2);

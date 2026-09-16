@@ -99,18 +99,39 @@ the UI.
    recording, and this document and the `lib/visca.js` boundary must be
    updated first.
 
-## Deliberately not implemented (needs vendor documentation)
+## AI tracking control
 
-The Astra P1's **AI tracking on/off**, **SpeedByZoom**, and **preset-call
-speed** have no publicly documented VISCA command sequences. Sending
-guessed bytes to a camera feeding a live recording would violate this
-policy ("if a command cannot be validated as safe, it is not sent"), so
-PTZ Control does not attempt them. Operate those features from the
-camera's own remote or web interface. When Hollyland's VISCA extension
-documentation for these commands is available, they can be added as
-operator-initiated controls after hardware verification. Note the P1
-ignores manual pan/tilt while AI tracking is active — the operator guide
-explains this so a "stuck" camera isn't mistaken for a control failure.
+Tracking on/off is implemented as an operator-initiated, per-camera,
+control-plane command (never automatic, never broadcast to all cameras,
+never re-applied after a reconnect). Because Hollyland has not published
+the Astra P1's own VISCA extension list, PTZ Control offers the two
+conventions used across the common OEM PTZ platforms, selectable per
+camera in Setup mode:
+
+1. **Extended VISCA** (default): `81 0A 11 54 02 FF` on / `81 0A 11 54 03
+   FF` off — the sequence documented by several VISCA PTZ vendors on the
+   same platform family (e.g. Zowietek, MSolutions).
+2. **Preset recall 80/81**: recalling preset 80 starts tracking and 81
+   stops it — plain, standard VISCA preset-recall commands.
+
+Both are control-port packets only; a camera that does not implement a
+convention ignores it or returns a VISCA error, and video/NDI is untouched
+either way. **Verify tracking control on real hardware in Setup mode
+before a service**, and switch the per-camera method if the default has no
+effect. While tracking is active the P1 ignores manual pan/tilt, so PTZ
+Control locks pan/tilt/home for that camera and rejects such commands
+with an actionable message; the UI's honest state is "as last commanded"
+(there is no VISCA inquiry to read tracking state back, e.g. if it was
+toggled from the camera's own remote). Presenter-vs-Zone mode and zone
+setup remain on the camera's web interface.
+
+## Still not implemented (needs vendor documentation)
+
+**SpeedByZoom** and **preset-call speed** have no publicly documented
+VISCA sequences for the Astra P1 and no safe generic convention; configure
+them from the camera's web interface. They can be added as
+operator-initiated Setup controls once Hollyland's command list is
+available and hardware-verified.
 
 ## Per-camera disable and manual retry
 

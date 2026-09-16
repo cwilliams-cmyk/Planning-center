@@ -146,6 +146,8 @@ function renderGrid() {
       : 'Park this camera: no control commands or reconnect attempts until re-enabled. Video output is unaffected.';
     const freeze = tile.querySelector('.freeze-toggle input');
     if (freeze && document.activeElement !== freeze) freeze.checked = !!cam.freezeOnRecall;
+    const method = tile.querySelector('.tracking-method select');
+    if (method && document.activeElement !== method) method.value = cam.trackingMethod || 'visca';
 
     const img = tile.querySelector('img');
     const noVideo = tile.querySelector('.no-video');
@@ -205,6 +207,14 @@ function buildTile(cam) {
         title="During preset recall, hold the current frame on the camera's output so viewers don't see the physical move. The frame resumes automatically about 2.5 seconds after recall. Needs verification on your camera before relying on it in a service.">
         <input type="checkbox"> Image freeze during preset recall
       </label>
+      <label class="tracking-method"
+        title="Which command convention this camera uses for AI tracking on/off. If Start AI Tracking has no effect, switch to the other method and test again (Setup mode, before service).">
+        Tracking command:
+        <select>
+          <option value="visca">Extended VISCA (default)</option>
+          <option value="preset">Recall preset 80/81</option>
+        </select>
+      </label>
     </div>`;
 
   tile.addEventListener('click', () => {
@@ -253,6 +263,13 @@ function buildTile(cam) {
     refresh();
   });
   tile.querySelector('.freeze-toggle').addEventListener('click', (e) => e.stopPropagation());
+  const method = tile.querySelector('.tracking-method select');
+  method.addEventListener('click', (e) => e.stopPropagation());
+  method.addEventListener('change', async (e) => {
+    await api(`/api/cameras/${cam.ip}`, { method: 'PATCH', body: JSON.stringify({ trackingMethod: e.target.value }) });
+    refresh();
+  });
+  tile.querySelector('.tracking-method').addEventListener('click', (e) => e.stopPropagation());
   return tile;
 }
 
@@ -279,6 +296,38 @@ function renderTarget() {
   $('#btn-af').setAttribute('aria-pressed', fm === 'auto');
   $('#btn-mf').setAttribute('aria-pressed', fm === 'manual');
   $('#mf-warning').hidden = fm !== 'manual';
+  renderTracking(cam);
+}
+
+function trackingOn(cam) {
+  return !!(cam && cam.tracking === true);
+}
+
+function renderTracking(cam) {
+  const stateEl = $('#tracking-state');
+  const btn = $('#btn-track-toggle');
+  const banner = $('#tracking-banner');
+  if (!cam || state.all) {
+    stateEl.textContent = '—';
+    btn.disabled = true;
+    banner.hidden = true;
+    document.body.classList.remove('tracking-active');
+    return;
+  }
+  btn.disabled = false;
+  if (cam.tracking === true) {
+    stateEl.textContent = 'Tracking Active';
+    btn.textContent = 'Stop Tracking & Take Manual Control';
+    banner.hidden = false;
+    document.body.classList.add('tracking-active');
+  } else {
+    // false = we turned it off; null = unknown (could have been toggled from
+    // the camera's own remote/web UI - there is no way to read it back).
+    stateEl.textContent = cam.tracking === false ? 'Off' : 'Off (as last known)';
+    btn.textContent = 'Start AI Tracking';
+    banner.hidden = true;
+    document.body.classList.remove('tracking-active');
+  }
 }
 
 // ---- Operating mode / lock ----------------------------------------------------
@@ -358,10 +407,35 @@ function bindHold(el, start, stop) {
 
 for (const btn of $$('.dpad [data-dir]')) {
   bindHold(btn,
-    () => sendPTZ({ action: 'move', dir: btn.dataset.dir }),
+    () => {
+      if (trackingOn(selectedCamera()) && !state.all) {
+        toast('Manual pan/tilt is unavailable while AI Tracking is active. Stop tracking to take manual control.');
+        return;
+      }
+      sendPTZ({ action: 'move', dir: btn.dataset.dir });
+    },
     () => sendPTZ({ action: 'stop' }));
 }
-$('#btn-home').addEventListener('click', () => sendPTZ({ action: 'home' }));
+$('#btn-home').addEventListener('click', () => {
+  if (trackingOn(selectedCamera()) && !state.all) {
+    toast('Manual pan/tilt is unavailable while AI Tracking is active. Stop tracking to take manual control.');
+    return;
+  }
+  sendPTZ({ action: 'home' });
+});
+
+$('#btn-track-toggle').addEventListener('click', async () => {
+  const cam = selectedCamera();
+  if (!cam || state.all) return;
+  const turnOn = !trackingOn(cam);
+  sendPTZ({ action: 'tracking', on: turnOn });
+  toast(turnOn
+    ? `AI Tracking requested on ${cam.name}. If the camera doesn't start tracking, switch the tracking command method in Setup mode.`
+    : `Tracking stop requested — ${cam.name} is back under manual control.`, 4000);
+  // Optimistic update; the next refresh confirms from the server.
+  cam.tracking = turnOn;
+  renderTracking(cam);
+});
 
 for (const btn of $$('[data-zoom]')) {
   bindHold(btn,
@@ -505,6 +579,13 @@ function recallPreset(slot) {
     toast(`${cam.name} is disabled. Enable it in Setup mode to control it.`, 4500);
     return;
   }
+  if (!state.all && trackingOn(cam)) {
+    const label = presetName(cam, String(slot)) || `preset ${slot}`;
+    if (!confirm(`${cam.name} is AI Tracking. Stop tracking and recall ${label}?`)) return;
+    sendPTZ({ action: 'tracking', on: false });
+    cam.tracking = false;
+    renderTracking(cam);
+  }
   sendPTZ({ action: 'preset', mode: 'recall', slot });
   // Honest wording: over UDP we cannot positively verify completion, so
   // this reports the request, not a confirmed camera position.
@@ -586,6 +667,12 @@ document.addEventListener('keydown', (e) => {
   if (e.target.matches('input, textarea, select') || e.repeat) return;
   if (keyDirs[e.key]) {
     e.preventDefault();
+    if (trackingOn(selectedCamera()) && !state.all) {
+      if (heldKeys.size === 0) {
+        toast('Manual pan/tilt is unavailable while AI Tracking is active. Stop tracking to take manual control.');
+      }
+      return;
+    }
     heldKeys.add(e.key);
     const send = () => sendPTZ({ action: 'move', dir: currentKeyDir() });
     send();

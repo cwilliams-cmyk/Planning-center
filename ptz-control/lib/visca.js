@@ -15,7 +15,9 @@
  *   SAFE LIVE CONTROL (allowed in Live Control mode):
  *     pan/tilt drive + stop, zoom, focus, autofocus mode, preset recall,
  *     home, version inquiry (used as a lightweight health check),
- *     picture freeze (only as the operator-chosen freeze-on-recall option)
+ *     picture freeze (only as the operator-chosen freeze-on-recall option),
+ *     AI tracking on/off (operator-initiated only, never automatic;
+ *     default bytes are the common OEM extension - verify on hardware)
  *   ADVANCED IMAGE / SHADING (operator-initiated only):
  *     exposure mode, iris/shutter/gain/brightness steps, exposure comp,
  *     white balance modes, one-push WB, backlight compensation
@@ -117,6 +119,19 @@ const cmd = {
    */
   pictureFreeze(on) {
     return Buffer.from([0x81, 0x01, 0x04, 0x62, on ? 0x02 : 0x03, 0xff]);
+  },
+  /**
+   * AI tracking on/off - the extended VISCA command shared by the common
+   * OEM PTZ platform family (documented by e.g. Zowietek and MSolutions:
+   * 81 0A 11 54 02 FF on / 81 0A 11 54 03 FF off). Hollyland has not
+   * published the Astra P1's own command list, so this default must be
+   * verified on hardware in Setup mode before a service; cameras that use
+   * the other common convention can be switched to the preset-80/81 method
+   * per camera. Control-plane only: a camera that does not implement this
+   * command ignores it or replies with a VISCA error - video is untouched.
+   */
+  tracking(on) {
+    return Buffer.from([0x81, 0x0a, 0x11, 0x54, on ? 0x02 : 0x03, 0xff]);
   },
 };
 

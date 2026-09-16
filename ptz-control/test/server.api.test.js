@@ -55,6 +55,11 @@ const isMove = (p) => isPanTiltDrive(p) && !isPanTiltStop(p);
 const isFreeze = (p, on) =>
   p.payload[1] === 0x01 && p.payload[2] === 0x04 && p.payload[3] === 0x62 && p.payload[4] === (on ? 0x02 : 0x03);
 const isInquiry = (p) => p.type === 0x0110;
+const isTracking = (p, on) =>
+  p.payload[1] === 0x0a && p.payload[2] === 0x11 && p.payload[3] === 0x54 && p.payload[4] === (on ? 0x02 : 0x03);
+const isPresetRecall = (p, slot) =>
+  p.payload[1] === 0x01 && p.payload[2] === 0x04 && p.payload[3] === 0x3f && p.payload[4] === 0x02 &&
+  (slot === undefined || p.payload[5] === slot);
 
 // ---- App child process --------------------------------------------------------
 
@@ -250,6 +255,53 @@ test('integration: modes, connection states, coalescing, watchdog', { timeout: 6
       const r = await req(base, 'GET', '/api/cameras');
       return r.data.cameras[0].state === 'connected';
     });
+  });
+
+  await t.test('AI tracking: on/off commands, manual pan/tilt lockout, dual method', async () => {
+    // Turn tracking on (default extended-VISCA method).
+    let before = mock.received.length;
+    const on = await req(base, 'POST', '/api/camera/127.0.0.1/ptz', { action: 'tracking', on: true });
+    assert.equal(on.status, 200);
+    await tick(200);
+    assert.ok(mock.received.slice(before).some((p) => isTracking(p, true)), 'tracking-on bytes must reach the camera');
+    let list = await req(base, 'GET', '/api/cameras');
+    assert.equal(list.data.cameras.find((c) => c.ip === '127.0.0.1').tracking, true);
+
+    // Manual pan/tilt and home are honestly rejected while tracking.
+    const move = await req(base, 'POST', '/api/camera/127.0.0.1/ptz', { action: 'move', dir: 'up' });
+    assert.equal(move.status, 409);
+    assert.match(move.data.error, /AI Tracking is active/);
+    const home = await req(base, 'POST', '/api/camera/127.0.0.1/ptz', { action: 'home' });
+    assert.equal(home.status, 409);
+    // Zoom and preset recall remain available.
+    assert.equal((await req(base, 'POST', '/api/camera/127.0.0.1/ptz', { action: 'zoom', dir: 'tele' })).status, 200);
+    await req(base, 'POST', '/api/camera/127.0.0.1/ptz', { action: 'zoom', dir: 'stop' });
+
+    // Tracking cannot be broadcast to all cameras.
+    const all = await req(base, 'POST', '/api/all/ptz', { action: 'tracking', on: true });
+    assert.equal(all.status, 409);
+
+    // Turn tracking off -> manual control restored.
+    before = mock.received.length;
+    await req(base, 'POST', '/api/camera/127.0.0.1/ptz', { action: 'tracking', on: false });
+    await tick(300);
+    assert.ok(mock.received.slice(before).some((p) => isTracking(p, false)), 'tracking-off bytes must reach the camera');
+    const move2 = await req(base, 'POST', '/api/camera/127.0.0.1/ptz', { action: 'move', dir: 'up' });
+    assert.equal(move2.status, 200);
+    await req(base, 'POST', '/api/camera/127.0.0.1/ptz', { action: 'stop' });
+
+    // Alternate method: recall preset 80 (on) / 81 (off) - standard VISCA.
+    assert.equal(
+      (await req(base, 'PATCH', '/api/cameras/127.0.0.1', { trackingMethod: 'bogus' })).status, 400);
+    await req(base, 'PATCH', '/api/cameras/127.0.0.1', { trackingMethod: 'preset' });
+    before = mock.received.length;
+    await req(base, 'POST', '/api/camera/127.0.0.1/ptz', { action: 'tracking', on: true });
+    await req(base, 'POST', '/api/camera/127.0.0.1/ptz', { action: 'tracking', on: false });
+    await tick(300);
+    const during = mock.received.slice(before);
+    assert.ok(during.some((p) => isPresetRecall(p, 80)), 'preset-method on must recall preset 80');
+    assert.ok(during.some((p) => isPresetRecall(p, 81)), 'preset-method off must recall preset 81');
+    await req(base, 'PATCH', '/api/cameras/127.0.0.1', { trackingMethod: 'visca' });
   });
 
   await t.test('manual retry probes immediately and works in Live mode', async () => {

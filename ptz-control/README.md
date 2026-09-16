@@ -27,6 +27,9 @@ video** feeding a YoloBox Extreme or other recorder/switcher (see
   One camera's failure never affects another.
 - **First-class presets** — named per-camera presets with a separate Edit
   mode, confirmations before overwriting, and one-click/1–9-key recall.
+- **AI tracking** — start/stop per camera with honest state, automatic
+  pan/tilt lockout while tracking (the P1 ignores manual moves then), and
+  two selectable command conventions (verify on hardware in Setup mode).
 - **Optional previews** — low-bandwidth RTSP *sub-stream* pulls, off by
   default in Live Control; never required for control, never touching NDI.
 - **Diagnostics** — connection log, camera states, one-click "copy support

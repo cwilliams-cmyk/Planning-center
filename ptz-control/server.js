@@ -109,6 +109,21 @@ const DEFAULT_PRESET_ORDER = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 // How long after a freeze-on-recall before the (redundant) unfreezes go out.
 const UNFREEZE_MS = parseInt(process.env.PTZ_UNFREEZE_MS || '2500', 10);
 
+/**
+ * AI tracking state as last commanded by this app, per camera ip.
+ * true = we turned tracking on, false = we turned it off, absent = unknown
+ * (e.g. tracking was toggled from the camera's own remote/web UI - there is
+ * no VISCA inquiry to read it back, so the UI is honest about "unknown").
+ */
+const trackingState = new Map();
+
+// Astra P1 behavior (per Hollyland's FAQ): manual pan/tilt is ignored while
+// AI tracking is active, so reject it with an actionable message instead of
+// letting controls appear to work and silently fail.
+const TRACKING_BLOCKED_MSG =
+  'Manual pan/tilt is unavailable while AI Tracking is active. ' +
+  'Stop tracking to take manual control.';
+
 const IP_RE = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 function validIp(ip) {
   const m = IP_RE.exec(String(ip || '').trim());
@@ -142,6 +157,7 @@ function loadConfig() {
           source: c.source || 'saved',
           disabled: !!c.disabled,
           freezeOnRecall: !!c.freezeOnRecall,
+          trackingMethod: c.trackingMethod === 'preset' ? 'preset' : 'visca',
           presets: c.presets && typeof c.presets === 'object' ? c.presets : {},
           presetOrder: validPresetOrder(c.presetOrder) ? c.presetOrder : [...DEFAULT_PRESET_ORDER],
         });
@@ -185,6 +201,7 @@ function addCamera({ ip, name, protocol, port, rtsp, source }) {
     source: source || (existing && existing.source) || 'manual',
     disabled: existing ? !!existing.disabled : false,
     freezeOnRecall: existing ? !!existing.freezeOnRecall : false,
+    trackingMethod: (existing && existing.trackingMethod) || 'visca',
     presets: (existing && existing.presets) || {},
     presetOrder: (existing && existing.presetOrder) || [...DEFAULT_PRESET_ORDER],
   };
@@ -219,6 +236,7 @@ function removeCamera(ip) {
   health.remove(ip);
   queues.remove(ip);
   motionGuard.noteStop(ip);
+  trackingState.delete(ip);
   saveConfig();
   log.info('camera_removed', { camera: ip });
   return true;
@@ -299,6 +317,32 @@ function dispatchPTZ(camera, body) {
   if (body.action === 'preset' && body.mode !== 'recall' && mode !== 'setup') {
     return LIVE_BLOCKED_MSG; // preset save/reset only from Edit Presets (Setup)
   }
+
+  // AI tracking on/off: operator-initiated only, never automatic. Two
+  // command conventions exist in the wild; the per-camera trackingMethod
+  // picks the one this camera honors (verify in Setup before a service).
+  if (body.action === 'tracking') {
+    const on = body.on !== false;
+    const payload = camera.trackingMethod === 'preset'
+      ? cmd.preset('recall', on ? 80 : 81)
+      : cmd.tracking(on);
+    // Turning tracking on makes queued manual movement obsolete; turning it
+    // off must land reliably so the operator can take manual control. Both
+    // ride the never-dropped stop lane.
+    motionGuard.noteStop(camera.ip);
+    enqueue(camera, payload, on ? KIND.ONESHOT : KIND.STOP);
+    trackingState.set(camera.ip, on);
+    log.info(on ? 'tracking_on' : 'tracking_off', { camera: camera.ip, method: camera.trackingMethod });
+    return null;
+  }
+
+  // The Astra P1 ignores manual pan/tilt while tracking is active - be
+  // honest instead of letting the D-pad silently do nothing.
+  if (trackingState.get(camera.ip) === true &&
+      (body.action === 'move' || body.action === 'home')) {
+    return TRACKING_BLOCKED_MSG;
+  }
+
   const payload = ptzCommand(body);
   if (!payload) return 'unknown action';
 
@@ -372,9 +416,14 @@ function readBody(req) {
 
 function cameraList() {
   return [...cameras.values()].map((c) => {
-    if (c.disabled) return { ...c, state: 'disabled', lastSeen: 0, online: false };
+    const tracking = trackingState.has(c.ip) ? trackingState.get(c.ip) : null; // null = unknown
+    if (c.disabled) return { ...c, state: 'disabled', lastSeen: 0, online: false, tracking };
     const h = health.status(c.ip);
-    return { ...c, state: h.state, lastSeen: h.lastSeen, online: h.state === 'connected' || h.state === 'degraded' };
+    return {
+      ...c, tracking,
+      state: h.state, lastSeen: h.lastSeen,
+      online: h.state === 'connected' || h.state === 'degraded',
+    };
   });
 }
 
@@ -467,6 +516,12 @@ const server = http.createServer(async (req, res) => {
           camera.rtsp = body.rtsp || undefined;
         }
         if (body.freezeOnRecall !== undefined) camera.freezeOnRecall = !!body.freezeOnRecall;
+        if (body.trackingMethod !== undefined) {
+          if (!['visca', 'preset'].includes(body.trackingMethod)) {
+            return json(res, 400, { error: 'trackingMethod must be "visca" or "preset"' });
+          }
+          camera.trackingMethod = body.trackingMethod;
+        }
         saveConfig();
         return json(res, 200, { camera });
       }
@@ -540,6 +595,9 @@ const server = http.createServer(async (req, res) => {
       }
       if (req.method === 'POST' && url.pathname === '/api/all/ptz') {
         const body = await readBody(req);
+        if (body.action === 'tracking') {
+          return json(res, 409, { error: 'AI Tracking is controlled per camera, not broadcast to all.' });
+        }
         let sent = 0;
         let firstErr = null;
         for (const camera of cameras.values()) {
