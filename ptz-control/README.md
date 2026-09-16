@@ -11,6 +11,9 @@ VISCA-over-IP camera). One browser window gives you:
 - **Unified PTZ controls** — one panel drives whichever camera you click,
   with an **ALL** switch to broadcast a command (e.g. recall preset 1) to
   every camera simultaneously.
+- **Image / exposure controls** — exposure mode (auto, manual, shutter or
+  iris priority, bright), iris/shutter/gain/brightness stepping, white
+  balance modes, and backlight compensation.
 
 ## Requirements
 
@@ -20,6 +23,13 @@ VISCA-over-IP camera). One browser window gives you:
 - The computer must be on the same network/VLAN as the cameras
 
 ## Run it
+
+**On a Mac**, just double-click **`Astra PTZ Control.command`** — it starts
+the server and opens the dashboard in your browser. (First time, macOS may
+block it: right-click → Open → Open, or allow it under System Settings →
+Privacy & Security. Leave the Terminal window open while using the app.)
+
+Or from a terminal on any platform:
 
 ```sh
 cd ptz-control

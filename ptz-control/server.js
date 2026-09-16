@@ -131,7 +131,28 @@ function ptzCommand(body) {
     case 'focus': return cmd.focus(body.dir, zoomSpeed); // dir: far|near|stop
     case 'autofocus': return cmd.autoFocus(body.on !== false);
     case 'preset': return cmd.preset(body.mode, body.slot); // mode: set|recall|reset
+    // --- image / exposure ---
+    case 'exposureMode': return cmd.exposureMode(body.mode); // auto|manual|shutter|iris|bright
+    case 'image': {
+      // what: iris|shutter|gain|bright|expcomp, dir: up|down|reset
+      const step = cmd.imageStep(body.what, body.dir);
+      if (!step) return null;
+      // Exposure compensation only applies once enabled.
+      return body.what === 'expcomp' ? [cmd.expCompOn(true), step] : step;
+    }
+    case 'wb': {
+      const wb = cmd.whiteBalance(body.mode); // auto|indoor|outdoor|onepush|manual
+      if (!wb) return null;
+      return body.mode === 'onepush' ? [wb, cmd.onePushWBTrigger()] : wb;
+    }
+    case 'backlight': return cmd.backlight(body.on !== false);
     default: return null;
+  }
+}
+
+function sendPTZ(camera, payload) {
+  for (const p of Array.isArray(payload) ? payload : [payload]) {
+    visca.send(camera, p);
   }
 }
 
@@ -219,14 +240,14 @@ const server = http.createServer(async (req, res) => {
         const body = await readBody(req);
         const payload = ptzCommand(body);
         if (!payload) return json(res, 400, { error: 'unknown action' });
-        visca.send(camera, payload);
+        sendPTZ(camera, payload);
         return json(res, 200, { ok: true });
       }
       if (req.method === 'POST' && url.pathname === '/api/all/ptz') {
         const body = await readBody(req);
         const payload = ptzCommand(body);
         if (!payload) return json(res, 400, { error: 'unknown action' });
-        for (const camera of cameras.values()) visca.send(camera, payload);
+        for (const camera of cameras.values()) sendPTZ(camera, payload);
         return json(res, 200, { ok: true, sentTo: cameras.size });
       }
       return json(res, 404, { error: 'not found' });

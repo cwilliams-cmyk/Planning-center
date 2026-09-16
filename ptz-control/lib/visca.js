@@ -57,6 +57,35 @@ const cmd = {
   versionInq() {
     return Buffer.from([0x81, 0x09, 0x00, 0x02, 0xff]);
   },
+
+  // ---- Image / exposure ----
+
+  // mode: 'auto' | 'manual' | 'shutter' | 'iris' | 'bright'
+  exposureMode(mode) {
+    const m = { auto: 0x00, manual: 0x03, shutter: 0x0a, iris: 0x0b, bright: 0x0d }[mode];
+    return m === undefined ? null : Buffer.from([0x81, 0x01, 0x04, 0x39, m, 0xff]);
+  },
+  // One VISCA step. what: 'iris'|'shutter'|'gain'|'bright'|'expcomp', dir: 'up'|'down'|'reset'
+  imageStep(what, dir) {
+    const code = { iris: 0x0b, shutter: 0x0a, gain: 0x0c, bright: 0x0d, expcomp: 0x0e }[what];
+    const d = { reset: 0x00, up: 0x02, down: 0x03 }[dir];
+    if (code === undefined || d === undefined) return null;
+    return Buffer.from([0x81, 0x01, 0x04, code, d, 0xff]);
+  },
+  expCompOn(on) {
+    return Buffer.from([0x81, 0x01, 0x04, 0x3e, on ? 0x02 : 0x03, 0xff]);
+  },
+  // mode: 'auto' | 'indoor' | 'outdoor' | 'onepush' | 'manual'
+  whiteBalance(mode) {
+    const m = { auto: 0x00, indoor: 0x01, outdoor: 0x02, onepush: 0x03, manual: 0x05 }[mode];
+    return m === undefined ? null : Buffer.from([0x81, 0x01, 0x04, 0x35, m, 0xff]);
+  },
+  onePushWBTrigger() {
+    return Buffer.from([0x81, 0x01, 0x04, 0x10, 0x05, 0xff]);
+  },
+  backlight(on) {
+    return Buffer.from([0x81, 0x01, 0x04, 0x33, on ? 0x02 : 0x03, 0xff]);
+  },
 };
 
 // ---- Sony VISCA-over-IP framing -----------------------------------------

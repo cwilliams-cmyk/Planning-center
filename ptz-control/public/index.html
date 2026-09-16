@@ -72,6 +72,61 @@
       <span id="speed-val">12</span>
     </div>
 
+    <details class="image-panel" id="image-panel">
+      <summary><span class="label">Image / Exposure</span></summary>
+
+      <div class="image-row">
+        <span>Exposure</span>
+        <select id="exposure-mode">
+          <option value="auto">Auto</option>
+          <option value="manual">Manual</option>
+          <option value="shutter">Shutter priority</option>
+          <option value="iris">Iris priority</option>
+          <option value="bright">Bright</option>
+        </select>
+      </div>
+
+      <div class="image-row"><span>Iris</span>
+        <div class="steppers" data-what="iris">
+          <button data-step="down">−</button><button data-step="reset">•</button><button data-step="up">+</button>
+        </div>
+      </div>
+      <div class="image-row"><span>Shutter</span>
+        <div class="steppers" data-what="shutter">
+          <button data-step="down">−</button><button data-step="reset">•</button><button data-step="up">+</button>
+        </div>
+      </div>
+      <div class="image-row"><span>Gain</span>
+        <div class="steppers" data-what="gain">
+          <button data-step="down">−</button><button data-step="reset">•</button><button data-step="up">+</button>
+        </div>
+      </div>
+      <div class="image-row"><span>Brightness</span>
+        <div class="steppers" data-what="expcomp">
+          <button data-step="down">−</button><button data-step="reset">•</button><button data-step="up">+</button>
+        </div>
+      </div>
+
+      <div class="image-row">
+        <span>White bal.</span>
+        <select id="wb-mode">
+          <option value="auto">Auto</option>
+          <option value="indoor">Indoor</option>
+          <option value="outdoor">Outdoor</option>
+          <option value="onepush">One-push</option>
+          <option value="manual">Manual</option>
+        </select>
+      </div>
+
+      <div class="image-row">
+        <span>Backlight comp.</span>
+        <input type="checkbox" id="backlight">
+      </div>
+
+      <p class="hint tiny">−/+ steps apply in the matching exposure mode
+        (e.g. iris steps need Manual or Iris priority). • resets to default.</p>
+    </details>
+
     <div class="presets">
       <div class="presets-head">
         <span class="label">Presets</span>

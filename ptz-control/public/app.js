@@ -199,6 +199,25 @@ $('#preset-set-mode').addEventListener('change', (e) => {
   presetGrid.classList.toggle('set-mode', e.target.checked);
 });
 
+// ---- Image / exposure controls ----------------------------------------------
+
+$('#exposure-mode').addEventListener('change', (e) => {
+  sendPTZ({ action: 'exposureMode', mode: e.target.value });
+});
+for (const group of document.querySelectorAll('.steppers')) {
+  for (const btn of group.querySelectorAll('button')) {
+    btn.addEventListener('click', () => {
+      sendPTZ({ action: 'image', what: group.dataset.what, dir: btn.dataset.step });
+    });
+  }
+}
+$('#wb-mode').addEventListener('change', (e) => {
+  sendPTZ({ action: 'wb', mode: e.target.value });
+});
+$('#backlight').addEventListener('change', (e) => {
+  sendPTZ({ action: 'backlight', on: e.target.checked });
+});
+
 // ---- Keyboard control ------------------------------------------------------
 
 const keyDirs = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };

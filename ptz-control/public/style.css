@@ -153,6 +153,36 @@ main {
 .speed-row input { flex: 1; accent-color: var(--accent); }
 #speed-val { min-width: 20px; text-align: right; font-variant-numeric: tabular-nums; }
 
+/* ---- Image / exposure panel ---- */
+.image-panel {
+  background: var(--panel-2);
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+}
+.image-panel summary { cursor: pointer; user-select: none; }
+.image-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 13px;
+}
+.image-row select {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 4px 6px;
+  font: inherit;
+  max-width: 150px;
+}
+.steppers { display: flex; gap: 4px; }
+.steppers button { width: 30px; padding: 3px 0; border-radius: 7px; }
+.hint.tiny { font-size: 11px; margin: 8px 0 2px; }
+#backlight { accent-color: var(--accent); width: 16px; height: 16px; }
+
 .presets-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 7px; }
 .presets-head label { color: var(--muted); font-size: 12px; cursor: pointer; user-select: none; }
 .preset-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
