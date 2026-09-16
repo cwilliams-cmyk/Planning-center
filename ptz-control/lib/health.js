@@ -139,6 +139,18 @@ class HealthMonitor {
     this.onTransition(rec.camera.ip, state, prev);
   }
 
+  /**
+   * Operator-initiated "retry now": reset the backoff and probe this one
+   * camera immediately. Never touches other cameras' schedules.
+   */
+  probeNow(ip) {
+    const rec = this.records.get(ip);
+    if (!rec) return false;
+    rec.backoffMs = 0;
+    this._scheduleNext(rec, 0);
+    return true;
+  }
+
   /** Pause probing (macOS sleep). Existing state is kept. */
   suspend() {
     this.suspended = true;

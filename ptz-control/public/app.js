@@ -1,6 +1,6 @@
 'use strict';
 
-/* OrZ Control - dashboard client.
+/* PTZ Control - dashboard client.
  *
  * Everything here issues camera-CONTROL requests only. Video previews are
  * optional pull-only streams; NDI video output to recorders/switchers is
@@ -17,8 +17,10 @@ const STATE_LABEL = {
   degraded: 'Intermittent connection — control may lag. Video output is not affected.',
   connecting: 'Connecting to camera controls…',
   offline: 'Camera control offline. Existing NDI video output should continue independently.',
+  disabled: 'Disabled by the operator. No control commands or reconnects until re-enabled in Setup mode.',
 };
-const STATE_SHORT = { connected: 'Connected', degraded: 'Intermittent', connecting: 'Connecting…', offline: 'Control offline' };
+const STATE_SHORT = { connected: 'Connected', degraded: 'Intermittent', connecting: 'Connecting…', offline: 'Control offline', disabled: 'Disabled' };
+const STATE_ICON = { connected: '●', degraded: '◐', connecting: '◌', offline: '○', disabled: '⏸' };
 
 const PRESET_EXAMPLES = 'Wide Stage, Pulpit, Worship Leader, Keys, Drums, Baptism, Congregation, Sermon Two-Shot';
 
@@ -125,19 +127,29 @@ function renderGrid() {
       grid.appendChild(tile);
     }
     tile.classList.toggle('selected', cam.ip === state.selected);
+    tile.classList.toggle('disabled', cam.state === 'disabled');
     const dot = tile.querySelector('.dot');
     dot.className = `dot ${cam.state}`;
     dot.title = STATE_LABEL[cam.state] || cam.state;
     tile.querySelector('.name').textContent = cam.name;
-    tile.querySelector('.status-text').textContent = STATE_SHORT[cam.state] || cam.state;
+    // Icon + text so state never depends on color alone.
+    tile.querySelector('.status-text').textContent =
+      `${STATE_ICON[cam.state] || ''} ${STATE_SHORT[cam.state] || cam.state}`;
     tile.querySelector('.status-text').className = `status-text ${cam.state}`;
 
     const overlay = tile.querySelector('.offline-note');
     overlay.hidden = cam.state !== 'offline';
+    const disBtn = tile.querySelector('.disable');
+    disBtn.textContent = cam.state === 'disabled' ? 'Enable' : 'Disable';
+    disBtn.title = cam.state === 'disabled'
+      ? 'Resume control connections to this camera'
+      : 'Park this camera: no control commands or reconnect attempts until re-enabled. Video output is unaffected.';
+    const freeze = tile.querySelector('.freeze-toggle input');
+    if (freeze && document.activeElement !== freeze) freeze.checked = !!cam.freezeOnRecall;
 
     const img = tile.querySelector('img');
     const noVideo = tile.querySelector('.no-video');
-    if (showPreviews && cam.state !== 'offline') {
+    if (showPreviews && cam.state !== 'offline' && cam.state !== 'disabled') {
       if (!state.streamsStarted.has(cam.ip)) {
         state.streamsStarted.add(cam.ip);
         img.src = `/stream/${cam.ip}`;
@@ -174,7 +186,8 @@ function buildTile(cam) {
       <span class="no-video">Preview off</span>
       <img alt="" hidden>
       <span class="offline-note" hidden>Camera control offline.<br>
-        <small>Existing NDI video output should continue independently.</small></span>
+        <small>Existing NDI video output should continue independently.</small>
+        <button class="retry">Retry control connection</button></span>
     </div>
     <div class="bar">
       <span class="dot"></span>
@@ -184,7 +197,14 @@ function buildTile(cam) {
       </div>
       <span class="ip">${cam.ip}</span>
       <button class="rename setup-only" title="Rename camera">✎</button>
+      <button class="disable setup-only">Disable</button>
       <button class="remove setup-only" title="Remove camera from this app (does not affect the camera itself)">✕</button>
+    </div>
+    <div class="tile-settings setup-only">
+      <label class="freeze-toggle"
+        title="During preset recall, hold the current frame on the camera's output so viewers don't see the physical move. The frame resumes automatically about 2.5 seconds after recall. Needs verification on your camera before relying on it in a service.">
+        <input type="checkbox"> Image freeze during preset recall
+      </label>
     </div>`;
 
   tile.addEventListener('click', () => {
@@ -209,11 +229,30 @@ function buildTile(cam) {
   tile.querySelector('.remove').addEventListener('click', async (e) => {
     e.stopPropagation();
     const current = state.cameras.find((c) => c.ip === cam.ip) || cam;
-    if (confirm(`Remove "${current.name}" (${cam.ip}) from OrZ Control?\n\nThis only removes it from this app. The camera itself, its video output, and its stored presets are not affected.`)) {
+    if (confirm(`Remove "${current.name}" (${cam.ip}) from PTZ Control?\n\nThis only removes it from this app. The camera itself, its video output, and its stored presets are not affected.`)) {
       await api(`/api/cameras/${cam.ip}`, { method: 'DELETE' });
       refresh();
     }
   });
+  tile.querySelector('.retry').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const r = await api(`/api/cameras/${cam.ip}/retry`, { method: 'POST', body: '{}' });
+    if (r.ok) toast('Retrying camera control only — video output and recording paths are not being changed.');
+  });
+  tile.querySelector('.disable').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const current = state.cameras.find((c) => c.ip === cam.ip) || cam;
+    const disabling = current.state !== 'disabled';
+    if (disabling && !confirm(`Disable "${current.name}" (${cam.ip})?\n\nPTZ Control will stop sending it commands and stop reconnecting until you enable it again. Its video output and saved presets are not affected.`)) return;
+    await api(`/api/cameras/${cam.ip}/disable`, { method: 'POST', body: JSON.stringify({ disabled: disabling }) });
+    refresh();
+  });
+  tile.querySelector('.freeze-toggle input').addEventListener('click', (e) => e.stopPropagation());
+  tile.querySelector('.freeze-toggle input').addEventListener('change', async (e) => {
+    await api(`/api/cameras/${cam.ip}`, { method: 'PATCH', body: JSON.stringify({ freezeOnRecall: e.target.checked }) });
+    refresh();
+  });
+  tile.querySelector('.freeze-toggle').addEventListener('click', (e) => e.stopPropagation());
   return tile;
 }
 
@@ -224,10 +263,15 @@ function renderTarget() {
     : cam ? cam.name : '—';
   const statusEl = $('#target-status');
   if (state.all || !cam) {
-    statusEl.textContent = state.all ? 'Commands go to every camera.' : '';
+    statusEl.textContent = state.all ? 'Commands go to every enabled camera.' : '';
     statusEl.className = 'target-status';
   } else {
-    statusEl.textContent = `${cam.ip} · ${STATE_LABEL[cam.state] || cam.state}`;
+    let line = `${cam.ip} · ${STATE_LABEL[cam.state] || cam.state}`;
+    if (cam.state === 'connected' && cam.lastSeen) {
+      const age = Math.max(0, Math.round((Date.now() - cam.lastSeen) / 1000));
+      line += ` · last control response ${age}s ago`;
+    }
+    statusEl.textContent = line;
     statusEl.className = `target-status ${cam.state}`;
   }
   // focus mode indicator for the selected camera
@@ -352,13 +396,20 @@ $('#btn-mf').addEventListener('click', () => {
   renderTarget();
 });
 
-// Speed: Slow / Normal / Fast
+// Speed: Slow / Normal / Fast, plus an advanced exact value (Setup mode)
 for (const btn of $$('.speed-btn')) {
   btn.addEventListener('click', () => {
     state.speed = Number(btn.dataset.speed);
     for (const b of $$('.speed-btn')) b.setAttribute('aria-pressed', b === btn);
+    $('#speed-custom').value = '';
   });
 }
+$('#speed-custom').addEventListener('change', (e) => {
+  const v = Math.max(1, Math.min(24, Number(e.target.value) || 12));
+  e.target.value = v;
+  state.speed = v;
+  for (const b of $$('.speed-btn')) b.setAttribute('aria-pressed', 'false');
+});
 
 $('#all-toggle').addEventListener('change', (e) => {
   state.all = e.target.checked;
@@ -379,21 +430,28 @@ function presetName(cam, slot) {
   return cam && cam.presets && cam.presets[slot] && cam.presets[slot].name;
 }
 
+function presetOrder(cam) {
+  const order = cam && Array.isArray(cam.presetOrder) ? cam.presetOrder : null;
+  return order && order.length === 9 ? order : [1, 2, 3, 4, 5, 6, 7, 8, 9];
+}
+
 function renderPresets() {
   const cam = selectedCamera();
   const editMode = $('#preset-edit-mode').checked && state.mode === 'setup';
   presetGrid.classList.toggle('edit-mode', editMode);
   $('#preset-hint').textContent = editMode
-    ? 'Edit mode: click a preset to save the camera’s current position into it; ✎ renames.'
+    ? 'Edit mode: click a preset to save the camera’s current position into it; ✎ renames, ◀ ▶ reorder.'
     : 'Click a preset to recall it. Keyboard: 1–9.';
   presetGrid.innerHTML = '';
-  for (let slot = 1; slot <= 9; slot++) {
+  const order = presetOrder(cam);
+  order.forEach((slot, pos) => {
     const name = presetName(cam, String(slot));
     const wrap = document.createElement('div');
     wrap.className = 'preset';
     const btn = document.createElement('button');
     btn.className = 'preset-btn';
     btn.innerHTML = `<span class="num">${slot}</span><span class="pname">${name ? escapeHtml(name) : '—'}</span>`;
+    btn.setAttribute('aria-label', name ? `Preset ${slot}: ${name}` : `Preset ${slot}`);
     btn.title = editMode
       ? `Save current position to preset ${slot}`
       : name ? `Recall "${name}"` : `Recall preset ${slot}`;
@@ -406,9 +464,30 @@ function renderPresets() {
       rn.title = `Rename preset ${slot}`;
       rn.addEventListener('click', () => renamePreset(slot));
       wrap.appendChild(rn);
+      const mkMove = (delta, glyph) => {
+        const b = document.createElement('button');
+        b.className = `preset-move ${delta < 0 ? 'left' : 'right'}`;
+        b.textContent = glyph;
+        b.title = 'Change this preset’s position in the grid (layout only)';
+        b.addEventListener('click', () => movePreset(pos, delta));
+        return b;
+      };
+      if (pos > 0) wrap.appendChild(mkMove(-1, '◀'));
+      if (pos < order.length - 1) wrap.appendChild(mkMove(1, '▶'));
     }
     presetGrid.appendChild(wrap);
-  }
+  });
+}
+
+async function movePreset(pos, delta) {
+  const cam = selectedCamera();
+  if (!cam) return;
+  const order = [...presetOrder(cam)];
+  const j = pos + delta;
+  if (j < 0 || j >= order.length) return;
+  [order[pos], order[j]] = [order[j], order[pos]];
+  await api(`/api/cameras/${cam.ip}/preset-order`, { method: 'PUT', body: JSON.stringify({ order }) });
+  refresh();
 }
 
 function escapeHtml(s) {
@@ -422,9 +501,17 @@ function recallPreset(slot) {
     toast('Camera control is offline — preset not sent. NDI video output is unaffected.', 4500);
     return;
   }
+  if (!state.all && cam && cam.state === 'disabled') {
+    toast(`${cam.name} is disabled. Enable it in Setup mode to control it.`, 4500);
+    return;
+  }
   sendPTZ({ action: 'preset', mode: 'recall', slot });
-  const idx = slot - 1;
-  const btn = presetGrid.children[idx] && presetGrid.children[idx].querySelector('.preset-btn');
+  // Honest wording: over UDP we cannot positively verify completion, so
+  // this reports the request, not a confirmed camera position.
+  const name = presetName(cam, String(slot));
+  toast(`Recall requested: ${name || `preset ${slot}`}`, 1800);
+  const pos = presetOrder(cam).indexOf(slot);
+  const btn = presetGrid.children[pos] && presetGrid.children[pos].querySelector('.preset-btn');
   if (btn) {
     btn.classList.add('recalling');
     setTimeout(() => btn.classList.remove('recalling'), 900);
@@ -576,10 +663,11 @@ $('#btn-diag').addEventListener('click', async () => {
   const data = await api('/api/diagnostics');
   diagText = data.text || '';
   $('#diag-summary').innerHTML = `
-    <p>OrZ Control ${escapeHtml(String(data.version || ''))} ·
+    <p>PTZ Control ${escapeHtml(String(data.version || ''))} ·
        Mode: <b>${data.mode === 'live' ? 'Live Control' : 'Setup'}</b></p>
     <ul>${(data.cameras || []).map((c) =>
-      `<li><b>${escapeHtml(c.name)}</b> (${c.ip}) — ${escapeHtml(STATE_SHORT[c.state] || c.state)}</li>`).join('')}</ul>`;
+      `<li><b>${escapeHtml(c.name)}</b> (${c.ip}) — ${escapeHtml(STATE_SHORT[c.state] || c.state)}
+        <br><small>${escapeHtml(c.nextStep || '')}</small></li>`).join('')}</ul>`;
   $('#diag-log').textContent = (data.log || [])
     .map((e) => {
       const { ts, level, event, ...rest } = e;

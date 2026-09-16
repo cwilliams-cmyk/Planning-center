@@ -1,5 +1,5 @@
 #!/bin/bash
-# Double-click launcher for OrZ Control (macOS).
+# Double-click launcher for PTZ Control (macOS).
 # Starts the server and opens the dashboard in your default browser.
 
 cd "$(dirname "$0")"
@@ -29,5 +29,5 @@ PORT="${PORT:-8300}"
 # Open the dashboard once the server has had a moment to start.
 ( sleep 1.5; open "http://localhost:$PORT" ) &
 
-echo "Starting OrZ Control... (leave this window open; press Ctrl+C to quit)"
+echo "Starting PTZ Control... (leave this window open; press Ctrl+C to quit)"
 exec node server.js --port "$PORT"

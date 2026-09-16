@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OrZ Control</title>
+<title>PTZ Control</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header>
-  <h1>OrZ Control</h1>
+  <h1>PTZ Control</h1>
 
   <div class="mode-switch" role="group" aria-label="Operating mode">
     <button id="mode-live" class="mode-btn" aria-pressed="true"
@@ -107,6 +107,9 @@
         <button class="mode-btn speed-btn" data-speed="12" aria-pressed="true">Normal</button>
         <button class="mode-btn speed-btn" data-speed="20">Fast</button>
       </div>
+      <input type="number" id="speed-custom" class="setup-only" min="1" max="24"
+        placeholder="#" aria-label="Advanced: exact pan speed, 1 to 24"
+        title="Advanced (Setup mode): exact pan speed 1–24. Overrides Slow/Normal/Fast until one is clicked.">
     </div>
 
     <details class="image-panel" id="image-panel">

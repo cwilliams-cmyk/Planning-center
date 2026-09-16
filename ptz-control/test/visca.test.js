@@ -71,7 +71,7 @@ test('safety boundary: no video/network/reboot commands exist', () => {
   const allowed = new Set([
     'panTilt', 'panTiltStop', 'home', 'zoom', 'focus', 'autoFocus', 'preset',
     'versionInq', 'exposureMode', 'imageStep', 'expCompOn', 'whiteBalance',
-    'onePushWBTrigger', 'backlight',
+    'onePushWBTrigger', 'backlight', 'pictureFreeze',
   ]);
   for (const key of Object.keys(cmd)) {
     assert.ok(allowed.has(key), `unexpected command builder "${key}" - review safety policy before allowing`);

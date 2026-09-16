@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Electron shell for OrZ Control.
+ * Electron shell for PTZ Control.
  * Runs the camera-control server in-process and shows the dashboard in its
  * own window - no browser or terminal involved.
  *
@@ -27,10 +27,13 @@ function migrateLegacyConfig() {
   try {
     const newFile = path.join(app.getPath('userData'), 'cameras.json');
     if (fs.existsSync(newFile)) return;
-    const legacyFile = path.join(app.getPath('appData'), 'Astra PTZ Control', 'cameras.json');
-    if (fs.existsSync(legacyFile)) {
-      fs.mkdirSync(path.dirname(newFile), { recursive: true });
-      fs.copyFileSync(legacyFile, newFile);
+    for (const legacyName of ['OrZ Control', 'Astra PTZ Control']) {
+      const legacyFile = path.join(app.getPath('appData'), legacyName, 'cameras.json');
+      if (fs.existsSync(legacyFile)) {
+        fs.mkdirSync(path.dirname(newFile), { recursive: true });
+        fs.copyFileSync(legacyFile, newFile);
+        return;
+      }
     }
   } catch {
     /* migration is best-effort; a fresh start is the worst case */
@@ -43,7 +46,7 @@ function createWindow() {
     height: 860,
     minWidth: 900,
     minHeight: 600,
-    title: 'OrZ Control',
+    title: 'PTZ Control',
     backgroundColor: '#101318',
     webPreferences: {
       contextIsolation: true,
@@ -76,7 +79,7 @@ app.whenReady().then(async () => {
     powerMonitor.on('lock-screen', () => onSuspend());
     powerMonitor.on('unlock-screen', () => onResume());
   } catch (err) {
-    dialog.showErrorBox('OrZ Control', `Could not start: ${err.message}`);
+    dialog.showErrorBox('PTZ Control', `Could not start: ${err.message}`);
     app.quit();
   }
 });

@@ -1,7 +1,7 @@
 {
-  "name": "orz-control",
-  "version": "2.0.0",
-  "description": "OrZ Control - production PTZ camera control for Hollyland Astra (VISCA over IP) cameras",
+  "name": "ptz-control",
+  "version": "2.1.0",
+  "description": "PTZ Control - production PTZ camera control for Hollyland Astra (VISCA over IP) cameras",
   "main": "electron/main.js",
   "scripts": {
     "start": "node server.js",
@@ -22,7 +22,7 @@
   },
   "build": {
     "appId": "org.ironoakchurch.astraptzcontrol",
-    "productName": "OrZ Control",
+    "productName": "PTZ Control",
     "directories": {
       "output": "dist",
       "buildResources": "build"

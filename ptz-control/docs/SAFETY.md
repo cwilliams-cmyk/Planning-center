@@ -1,13 +1,13 @@
-# OrZ Control — Non-Disruption Policy
+# PTZ Control — Non-Disruption Policy
 
-OrZ Control operates PTZ cameras (Hollyland Astra P1) on a production
+PTZ Control operates PTZ cameras (Hollyland Astra P1) on a production
 Ethernet network whose PoE+ switch also carries **live NDI video** from the
 cameras to a YoloBox Extreme and other recording/switching/monitoring
 devices. Those video paths may be actively recording or streaming whenever
 this app is in use.
 
 **The app's rule number one: the NDI video path is externally owned, live,
-and untouchable.** OrZ Control is a control-plane tool only.
+and untouchable.** PTZ Control is a control-plane tool only.
 
 ## What the app does
 
@@ -42,7 +42,7 @@ build if an unreviewed command builder is added.
 
 ## Failure behavior
 
-- If OrZ Control crashes, closes, loses the network, or a control session
+- If PTZ Control crashes, closes, loses the network, or a control session
   drops, nothing happens to camera video: the cameras keep sending their
   existing NDI output. Reconnection re-establishes the **control session
   only** and sends no initialization or configuration commands.
@@ -86,7 +86,9 @@ the UI.
 ## Command classification
 
 1. **Safe live control** — pan/tilt drive + stop, zoom, focus, autofocus
-   mode, preset recall, home, version inquiry.
+   mode, preset recall, home, version inquiry, and (only when the operator
+   has enabled it per camera) picture freeze around a preset recall, with
+   redundant automatic unfreeze.
 2. **Advanced image/shading** — exposure mode, iris/shutter/gain/brightness
    steps, white balance, backlight. Operator-initiated only; never applied
    automatically; applying to ALL cameras requires an explicit
@@ -96,3 +98,25 @@ the UI.
    explicit confirmation explaining that they can interrupt live video and
    recording, and this document and the `lib/visca.js` boundary must be
    updated first.
+
+## Deliberately not implemented (needs vendor documentation)
+
+The Astra P1's **AI tracking on/off**, **SpeedByZoom**, and **preset-call
+speed** have no publicly documented VISCA command sequences. Sending
+guessed bytes to a camera feeding a live recording would violate this
+policy ("if a command cannot be validated as safe, it is not sent"), so
+PTZ Control does not attempt them. Operate those features from the
+camera's own remote or web interface. When Hollyland's VISCA extension
+documentation for these commands is available, they can be added as
+operator-initiated controls after hardware verification. Note the P1
+ignores manual pan/tilt while AI tracking is active — the operator guide
+explains this so a "stuck" camera isn't mistaken for a control failure.
+
+## Per-camera disable and manual retry
+
+An operator can **disable** a camera (Setup mode): the app then sends it
+nothing at all — no commands, no probes, no reconnect attempts — until it
+is re-enabled, while its configuration and preset labels are preserved.
+**Retry control connection** (any mode) performs exactly one immediate
+control-port probe for that one camera; it never touches other cameras or
+any video path.

@@ -1,4 +1,9 @@
-# OrZ Control
+# PTZ Control
+
+> **Note:** PTZ Control is a standalone application with no relationship to
+> Planning Center or the presentation app elsewhere in this repository. It
+> currently lives in this repo's `ptz-control/` folder only until it moves
+> to its own dedicated repository.
 
 Production-grade PTZ camera control for **Hollyland Astra** (and other
 VISCA-over-IP) cameras, built for live church services and events. One
@@ -36,10 +41,10 @@ Actions. Grab it from the repo's **Releases** page (release
 - Apple Silicon Mac (M1/M2/M3/M4, 2020+): `…-apple-silicon.dmg`
 - Intel Mac: `…-intel.dmg`
 
-Open the `.dmg`, drag **OrZ Control** to **Applications**, then
+Open the `.dmg`, drag **PTZ Control** to **Applications**, then
 **right-click → Open → Open** on first launch (the app isn't notarized
 with Apple). If macOS refuses with a "damaged" warning, run once:
-`xattr -cr "/Applications/OrZ Control.app"` and open again.
+`xattr -cr "/Applications/PTZ Control.app"` and open again.
 
 The app bundles everything — no browser, Terminal, Node, or ffmpeg needed.
 
@@ -49,7 +54,7 @@ Requires [Node.js](https://nodejs.org) 18+; the optional previews also want
 [ffmpeg](https://ffmpeg.org) on your PATH (`brew install ffmpeg`). The
 computer must be on the same network/VLAN as the cameras.
 
-On a Mac, double-click **`OrZ Control.command`** — it starts the server and
+On a Mac, double-click **`PTZ Control.command`** — it starts the server and
 opens the dashboard in your browser. Or from a terminal:
 
 ```sh

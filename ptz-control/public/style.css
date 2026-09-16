@@ -12,6 +12,23 @@
   --warn: #fbbf24;
 }
 
+/* Respect the user's macOS appearance setting. */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f2f4f8;
+    --panel: #ffffff;
+    --panel-2: #e9edf3;
+    --border: #c6cedb;
+    --text: #17202b;
+    --muted: #5b6675;
+    --accent: #2563eb;
+    --accent-2: #1d4ed8;
+    --ok: #059669;
+    --bad: #dc2626;
+    --warn: #b45309;
+  }
+}
+
 * { box-sizing: border-box; }
 
 body {
@@ -52,6 +69,8 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .setup-only { display: none !important; }
 body.mode-setup .setup-only { display: inline-flex !important; }
 body.mode-setup label.setup-only { display: flex !important; }
+body.mode-setup div.setup-only { display: block !important; }
+body.mode-setup input.setup-only { display: inline-block !important; }
 
 /* ---- Mode switch ---- */
 .mode-switch {
@@ -111,6 +130,21 @@ main {
   transition: border-color .12s;
 }
 .tile.selected { border-color: var(--accent); }
+.tile.disabled .video, .tile.disabled .name-block { opacity: .55; }
+
+.tile-settings {
+  padding: 0 10px 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.freeze-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+.freeze-toggle input { accent-color: var(--accent); }
+
+.offline-note .retry {
+  margin-top: 10px;
+  font-size: 12px;
+  padding: 5px 10px;
+}
 .tile .video {
   aspect-ratio: 16 / 9;
   background: #000;
@@ -143,7 +177,12 @@ main {
 .dot.degraded { background: var(--warn); }
 .dot.connecting { background: var(--warn); animation: pulse 1.2s ease-in-out infinite; }
 .dot.offline { background: var(--bad); }
+.dot.disabled { background: var(--muted); }
 @keyframes pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) {
+  .dot.connecting { animation: none; }
+  .tile { transition: none; }
+}
 
 .name-block { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .tile .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -285,6 +324,24 @@ body.locked #btn-home { opacity: .4; pointer-events: none; }
   width: 22px; height: 22px; padding: 0;
   border-radius: 50%; font-size: 11px;
   background: var(--warn); color: #1a1f27; border: none;
+}
+.preset-move {
+  position: absolute; bottom: -6px;
+  width: 20px; height: 20px; padding: 0;
+  border-radius: 50%; font-size: 9px;
+  background: var(--panel-2); border: 1px solid var(--border);
+}
+.preset-move.left { left: -5px; }
+.preset-move.right { right: -5px; }
+
+#speed-custom {
+  width: 52px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 4px 6px;
+  font: inherit;
 }
 
 /* ---- Diagnostics drawer ---- */

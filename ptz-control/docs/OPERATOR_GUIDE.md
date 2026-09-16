@@ -1,4 +1,4 @@
-# OrZ Control — Operator Guide
+# PTZ Control — Operator Guide
 
 A quick guide for camera operators. You cannot break the live video from
 this app: it sends camera-*control* commands only, and the video feeding
@@ -62,11 +62,30 @@ Focus: leave **Auto** on unless you have a reason not to. If you switch to
 
 - A red **Control offline** tile is not an emergency: video is unaffected.
   Check the camera's power and network cable; the app reconnects on its
-  own.
+  own, or click **Retry control connection** right on the tile.
+- A camera that's being worked on can be **Disabled** (Setup mode): the app
+  stops talking to it entirely until you enable it again. Its name and
+  presets are kept.
 - **Lock** (top right) freezes all controls while keeping status visible —
   useful if you need to step away.
 - Worried a camera is moving when it shouldn't? Press **Space** — stop is
   sent to every camera.
+- **Camera ignores pan/tilt?** If AI Tracking is turned on (from the
+  camera's own remote or web page), the Astra P1 ignores manual pan/tilt by
+  design. Turn tracking off on the camera to take manual control. PTZ
+  Control never changes tracking settings itself.
+
+## Nice extras (Setup mode)
+
+- **Image freeze during preset recall** (checkbox under each camera tile):
+  holds the current frame on the camera's output while it physically moves
+  to a preset, so viewers don't see the swing. It resumes automatically a
+  couple of seconds later. Try it before a service to confirm your camera
+  supports it.
+- **Reorder presets**: in Edit presets, use ◀ ▶ to arrange the grid the way
+  your service flows. This changes layout only, never the saved positions.
+- **Exact speed**: next to Slow/Normal/Fast there's a small number box
+  (1–24) for a precise speed; clicking Slow/Normal/Fast takes over again.
 
 ## Previews
 

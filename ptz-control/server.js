@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * OrZ Control - production PTZ control for Hollyland Astra cameras.
+ * PTZ Control - production PTZ control for Hollyland Astra cameras.
  *
  * NON-DISRUPTION POLICY (see docs/SAFETY.md): this app sends lightweight,
  * rate-limited VISCA control commands only. It never configures, restarts,
@@ -99,8 +99,15 @@ visca.onMessage((rinfo) => {
 
 // ---- Camera registry --------------------------------------------------------
 
-/** ip -> { ip, name, protocol, port?, rtsp?, source, presets: {slot: {name}} } */
+/**
+ * ip -> { ip, name, protocol, port?, rtsp?, source, disabled,
+ *         freezeOnRecall, presets: {slot: {name}}, presetOrder: [slots] }
+ */
 const cameras = new Map();
+
+const DEFAULT_PRESET_ORDER = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+// How long after a freeze-on-recall before the (redundant) unfreezes go out.
+const UNFREEZE_MS = parseInt(process.env.PTZ_UNFREEZE_MS || '2500', 10);
 
 const IP_RE = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 function validIp(ip) {
@@ -109,6 +116,10 @@ function validIp(ip) {
 }
 function validPort(port) {
   return port === undefined || (Number.isInteger(port) && port >= 1 && port <= 65535);
+}
+function validPresetOrder(order) {
+  return Array.isArray(order) && order.length === 9 &&
+    [...order].sort((a, b) => a - b).every((v, i) => v === i + 1);
 }
 
 function loadConfig() {
@@ -129,7 +140,10 @@ function loadConfig() {
           port: validPort(c.port) ? c.port : undefined,
           rtsp: typeof c.rtsp === 'string' && c.rtsp.startsWith('rtsp://') ? c.rtsp : undefined,
           source: c.source || 'saved',
+          disabled: !!c.disabled,
+          freezeOnRecall: !!c.freezeOnRecall,
           presets: c.presets && typeof c.presets === 'object' ? c.presets : {},
+          presetOrder: validPresetOrder(c.presetOrder) ? c.presetOrder : [...DEFAULT_PRESET_ORDER],
         });
       }
     }
@@ -141,7 +155,9 @@ function loadConfig() {
     try { fs.copyFileSync(CONFIG_FILE, backup); } catch {}
     log.error('config_corrupt', { detail: err.message, savedTo: path.basename(backup) });
   }
-  for (const camera of cameras.values()) health.add(camera);
+  for (const camera of cameras.values()) {
+    if (!camera.disabled) health.add(camera);
+  }
 }
 
 let saveTimer = null;
@@ -167,13 +183,34 @@ function addCamera({ ip, name, protocol, port, rtsp, source }) {
     port: port || (existing && existing.port) || undefined,
     rtsp: rtsp || (existing && existing.rtsp) || undefined,
     source: source || (existing && existing.source) || 'manual',
+    disabled: existing ? !!existing.disabled : false,
+    freezeOnRecall: existing ? !!existing.freezeOnRecall : false,
     presets: (existing && existing.presets) || {},
+    presetOrder: (existing && existing.presetOrder) || [...DEFAULT_PRESET_ORDER],
   };
   cameras.set(ip, camera);
-  health.add(camera);
+  if (!camera.disabled) health.add(camera);
   saveConfig();
   if (!existing) log.info('camera_added', { camera: ip, source: camera.source });
   return camera;
+}
+
+/**
+ * Disable = the operator has intentionally parked this camera: no health
+ * probes, no automatic reconnects, no commands until re-enabled. Its saved
+ * configuration and preset labels are fully preserved.
+ */
+function setCameraDisabled(camera, disabled) {
+  camera.disabled = !!disabled;
+  if (camera.disabled) {
+    health.remove(camera.ip);
+    queues.remove(camera.ip);
+    motionGuard.noteStop(camera.ip);
+  } else {
+    health.add(camera);
+  }
+  saveConfig();
+  log.info(disabled ? 'camera_disabled' : 'camera_enabled', { camera: camera.ip });
 }
 
 function removeCamera(ip) {
@@ -256,6 +293,9 @@ function ptzCommand(body) {
  * request is not allowed in the current mode.
  */
 function dispatchPTZ(camera, body) {
+  if (camera.disabled) {
+    return `${camera.name} is disabled in PTZ Control. Enable it in Setup mode to control it.`;
+  }
   if (body.action === 'preset' && body.mode !== 'recall' && mode !== 'setup') {
     return LIVE_BLOCKED_MSG; // preset save/reset only from Edit Presets (Setup)
   }
@@ -279,11 +319,25 @@ function dispatchPTZ(camera, body) {
     return null;
   }
 
+  // Optional per-camera "image freeze during preset recall": freeze right
+  // before the recall so the physical move is hidden on the live output,
+  // then unfreeze redundantly (three sends over two timers) - a lost UDP
+  // unfreeze must never leave a frozen frame on the recording.
+  if (body.action === 'preset' && body.mode === 'recall' && camera.freezeOnRecall) {
+    enqueue(camera, cmd.pictureFreeze(true), KIND.ONESHOT);
+    const unfreeze = () => {
+      if (!cameras.has(camera.ip)) return;
+      enqueue(camera, cmd.pictureFreeze(false), KIND.STOP); // stop-kind = never dropped, sent twice
+    };
+    setTimeout(unfreeze, UNFREEZE_MS).unref();
+    setTimeout(unfreeze, UNFREEZE_MS * 2).unref();
+  }
+
   for (const p of Array.isArray(payload) ? payload : [payload]) {
     enqueue(camera, p, KIND.ONESHOT);
   }
   if (body.action === 'preset') {
-    log.info(`preset_${body.mode}`, { camera: camera.ip, slot: body.slot });
+    log.info(`preset_${body.mode}`, { camera: camera.ip, slot: body.slot, freeze: !!camera.freezeOnRecall });
   } else if (body.action !== 'home') {
     log.info('image_command', { camera: camera.ip, action: body.action, detail: body.mode || body.what });
   }
@@ -318,6 +372,7 @@ function readBody(req) {
 
 function cameraList() {
   return [...cameras.values()].map((c) => {
+    if (c.disabled) return { ...c, state: 'disabled', lastSeen: 0, online: false };
     const h = health.status(c.ip);
     return { ...c, state: h.state, lastSeen: h.lastSeen, online: h.state === 'connected' || h.state === 'degraded' };
   });
@@ -345,13 +400,21 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, statePayload());
       }
       if (req.method === 'GET' && url.pathname === '/api/diagnostics') {
+        const NEXT_STEP = {
+          connected: 'No action needed.',
+          degraded: 'Control replies are intermittent - check cabling and switch port. Video is unaffected.',
+          connecting: 'Waiting for the first control reply. Verify the IP address and that the camera is powered.',
+          offline: 'Check the camera’s power and network cable, then use Retry. Video output continues independently.',
+          disabled: 'Disabled by the operator. Enable it in Setup mode to reconnect.',
+        };
         return json(res, 200, {
           version: VERSION,
           mode,
-          cameras: cameraList().map(({ ip, name, state, protocol, lastSeen }) => ({ ip, name, state, protocol, lastSeen })),
+          cameras: cameraList().map(({ ip, name, state, protocol, lastSeen }) =>
+            ({ ip, name, state, protocol, lastSeen, nextStep: NEXT_STEP[state] || '' })),
           log: log.list(250),
           text: [
-            `OrZ Control ${VERSION} - diagnostics ${new Date().toISOString()}`,
+            `PTZ Control ${VERSION} - diagnostics ${new Date().toISOString()}`,
             `Mode: ${mode === 'live' ? 'Live Control' : 'Setup'}`,
             ...cameraList().map((c) => `Camera ${c.name} (${c.ip}, ${c.protocol}): ${c.state}`),
             '',
@@ -403,8 +466,45 @@ const server = http.createServer(async (req, res) => {
           }
           camera.rtsp = body.rtsp || undefined;
         }
+        if (body.freezeOnRecall !== undefined) camera.freezeOnRecall = !!body.freezeOnRecall;
         saveConfig();
         return json(res, 200, { camera });
+      }
+
+      // ---- enable/disable a camera (Setup mode; a disabled camera gets no
+      //      probes, no reconnects, and no commands until re-enabled) ----
+      if (req.method === 'POST' && parts[1] === 'cameras' && parts[3] === 'disable') {
+        if (mode !== 'setup') return json(res, 409, { error: LIVE_BLOCKED_MSG });
+        const camera = cameras.get(parts[2]);
+        if (!camera) return json(res, 404, { error: 'unknown camera' });
+        const body = await readBody(req).catch(() => ({}));
+        setCameraDisabled(camera, body.disabled !== false);
+        return json(res, 200, { camera });
+      }
+
+      // ---- operator-initiated "retry control connection" (any mode; it is
+      //      one immediate control probe, nothing more) ----
+      if (req.method === 'POST' && parts[1] === 'cameras' && parts[3] === 'retry') {
+        const camera = cameras.get(parts[2]);
+        if (!camera) return json(res, 404, { error: 'unknown camera' });
+        if (camera.disabled) return json(res, 409, { error: `${camera.name} is disabled. Enable it in Setup mode first.` });
+        health.probeNow(camera.ip);
+        log.info('manual_retry', { camera: camera.ip });
+        return json(res, 200, { ok: true });
+      }
+
+      // ---- preset display order (Setup mode only) ----
+      if (req.method === 'PUT' && parts[1] === 'cameras' && parts[3] === 'preset-order') {
+        if (mode !== 'setup') return json(res, 409, { error: LIVE_BLOCKED_MSG });
+        const camera = cameras.get(parts[2]);
+        if (!camera) return json(res, 404, { error: 'unknown camera' });
+        const body = await readBody(req);
+        if (!validPresetOrder(body.order)) {
+          return json(res, 400, { error: 'order must contain each preset 1-9 exactly once' });
+        }
+        camera.presetOrder = body.order;
+        saveConfig();
+        return json(res, 200, { presetOrder: camera.presetOrder });
       }
 
       // ---- preset names (Setup mode only; the position itself is stored
@@ -443,6 +543,7 @@ const server = http.createServer(async (req, res) => {
         let sent = 0;
         let firstErr = null;
         for (const camera of cameras.values()) {
+          if (camera.disabled) continue;
           const err = dispatchPTZ(camera, body);
           if (err) firstErr = firstErr || err;
           else sent += 1;
@@ -455,6 +556,7 @@ const server = http.createServer(async (req, res) => {
       // Emergency stop for everything (also used by the page-unload beacon).
       if (req.method === 'POST' && url.pathname === '/api/all/stop') {
         for (const camera of cameras.values()) {
+          if (camera.disabled) continue;
           motionGuard.noteStop(camera.ip);
           sendFullStop(camera);
         }
@@ -510,7 +612,7 @@ function startServer({ port = PORT, configFile } = {}) {
         server.removeListener('error', onError);
         const actual = server.address().port;
         log.info('server_started', { port: actual, version: VERSION, mode });
-        console.log(`\nOrZ Control running at  http://localhost:${actual}\n`);
+        console.log(`\nPTZ Control running at  http://localhost:${actual}\n`);
         if (!streams.available) {
           console.log('NOTE: ffmpeg not found - camera control works fully, but the');
           console.log('      optional previews are disabled.\n');

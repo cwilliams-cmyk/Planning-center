@@ -52,6 +52,9 @@ function startMockCamera() {
 const isPanTiltDrive = (p) => p.payload[1] === 0x01 && p.payload[2] === 0x06 && p.payload[3] === 0x01;
 const isPanTiltStop = (p) => isPanTiltDrive(p) && p.payload[6] === 0x03 && p.payload[7] === 0x03;
 const isMove = (p) => isPanTiltDrive(p) && !isPanTiltStop(p);
+const isFreeze = (p, on) =>
+  p.payload[1] === 0x01 && p.payload[2] === 0x04 && p.payload[3] === 0x62 && p.payload[4] === (on ? 0x02 : 0x03);
+const isInquiry = (p) => p.type === 0x0110;
 
 // ---- App child process --------------------------------------------------------
 
@@ -59,6 +62,7 @@ function startApp(configPath) {
   return new Promise((resolve, reject) => {
     const proc = spawn(process.execPath, [SERVER, '--port', '0', '--config', configPath], {
       stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, PTZ_UNFREEZE_MS: '400' }, // shorten freeze-on-recall timers for tests
     });
     let out = '';
     const onData = (d) => {
@@ -199,12 +203,74 @@ test('integration: modes, connection states, coalescing, watchdog', { timeout: 6
     assert.equal(named.data.presets['1'].name, 'Wide Stage');
   });
 
+  await t.test('image freeze on recall: freeze, recall, redundant unfreeze', async () => {
+    // still in setup mode from the previous subtest
+    await req(base, 'PATCH', '/api/cameras/127.0.0.1', { freezeOnRecall: true });
+    const before = mock.received.length;
+    await req(base, 'POST', '/api/camera/127.0.0.1/ptz', { action: 'preset', mode: 'recall', slot: 1 });
+    await tick(1200); // unfreeze timers run at 400/800ms in tests
+    const during = mock.received.slice(before);
+    const freezeIdx = during.findIndex((p) => isFreeze(p, true));
+    const recallIdx = during.findIndex((p) => p.payload[3] === 0x3f && p.payload[4] === 0x02);
+    const unfreezes = during.filter((p) => isFreeze(p, false));
+    assert.ok(freezeIdx >= 0, 'freeze must be sent');
+    assert.ok(recallIdx > freezeIdx, 'freeze must precede the recall');
+    assert.ok(unfreezes.length >= 2, `unfreeze must be sent redundantly (saw ${unfreezes.length})`);
+    await req(base, 'PATCH', '/api/cameras/127.0.0.1', { freezeOnRecall: false });
+  });
+
+  await t.test('preset display order: validated, persisted, layout-only', async () => {
+    const bad = await req(base, 'PUT', '/api/cameras/127.0.0.1/preset-order', { order: [1, 1, 2, 3, 4, 5, 6, 7, 8] });
+    assert.equal(bad.status, 400);
+    const good = await req(base, 'PUT', '/api/cameras/127.0.0.1/preset-order', { order: [9, 8, 7, 6, 5, 4, 3, 2, 1] });
+    assert.equal(good.status, 200);
+    const { data } = await req(base, 'GET', '/api/cameras');
+    assert.deepEqual(data.cameras.find((c) => c.ip === '127.0.0.1').presetOrder, [9, 8, 7, 6, 5, 4, 3, 2, 1]);
+    await req(base, 'PUT', '/api/cameras/127.0.0.1/preset-order', { order: [1, 2, 3, 4, 5, 6, 7, 8, 9] });
+  });
+
+  await t.test('disabled camera: no commands, no probes; enable restores', async () => {
+    const dis = await req(base, 'POST', '/api/cameras/127.0.0.1/disable', { disabled: true });
+    assert.equal(dis.status, 200);
+    let list = await req(base, 'GET', '/api/cameras');
+    assert.equal(list.data.cameras[0].state, 'disabled');
+
+    const move = await req(base, 'POST', '/api/camera/127.0.0.1/ptz', { action: 'move', dir: 'up' });
+    assert.equal(move.status, 409);
+    assert.match(move.data.error, /disabled/i);
+
+    // No probes while disabled: the wire must stay quiet.
+    const before = mock.received.length;
+    await tick(1500);
+    const inquiries = mock.received.slice(before).filter(isInquiry);
+    assert.equal(inquiries.length, 0, 'disabled camera must not be probed');
+
+    await req(base, 'POST', '/api/cameras/127.0.0.1/disable', { disabled: false });
+    await waitFor(async () => {
+      const r = await req(base, 'GET', '/api/cameras');
+      return r.data.cameras[0].state === 'connected';
+    });
+  });
+
+  await t.test('manual retry probes immediately and works in Live mode', async () => {
+    await req(base, 'POST', '/api/mode', { mode: 'live' });
+    const before = mock.received.length;
+    const r = await req(base, 'POST', '/api/cameras/127.0.0.1/retry', {});
+    assert.equal(r.status, 200);
+    await tick(300);
+    const inquiries = mock.received.slice(before).filter(isInquiry);
+    assert.ok(inquiries.length >= 1, 'retry must trigger an immediate probe');
+    await req(base, 'POST', '/api/mode', { mode: 'setup' });
+  });
+
   await t.test('all-stop endpoint works and diagnostics are exposed', async () => {
     assert.equal((await req(base, 'POST', '/api/all/stop', {})).status, 200);
     const diag = await req(base, 'GET', '/api/diagnostics');
     assert.ok(diag.data.version);
     assert.ok(Array.isArray(diag.data.log) && diag.data.log.length > 0);
-    assert.match(diag.data.text, /OrZ Control/);
+    assert.match(diag.data.text, /PTZ Control/);
+    assert.ok(diag.data.cameras.every((c) => typeof c.nextStep === 'string' && c.nextStep.length > 0),
+      'each camera needs a recommended next action');
     assert.ok(!/password|token/i.test(diag.data.text), 'diagnostics must not leak secrets');
   });
 

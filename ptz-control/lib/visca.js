@@ -9,12 +9,13 @@
  *  - "raw"   : Bare VISCA bytes on port 1259 (Astra's plain UDP port).
  *
  * ============================ SAFETY BOUNDARY ============================
- * This module is the ONLY place OrZ Control builds camera commands, and it
+ * This module is the ONLY place PTZ Control builds camera commands, and it
  * deliberately implements control-safe commands only:
  *
  *   SAFE LIVE CONTROL (allowed in Live Control mode):
  *     pan/tilt drive + stop, zoom, focus, autofocus mode, preset recall,
- *     home, version inquiry (used as a lightweight health check)
+ *     home, version inquiry (used as a lightweight health check),
+ *     picture freeze (only as the operator-chosen freeze-on-recall option)
  *   ADVANCED IMAGE / SHADING (operator-initiated only):
  *     exposure mode, iris/shutter/gain/brightness steps, exposure comp,
  *     white balance modes, one-push WB, backlight compensation
@@ -106,6 +107,16 @@ const cmd = {
   },
   backlight(on) {
     return Buffer.from([0x81, 0x01, 0x04, 0x33, on ? 0x02 : 0x03, 0xff]);
+  },
+  /**
+   * CAM_PictureFreeze (standard Sony VISCA). Used only for the optional,
+   * per-camera "image freeze during preset recall" feature: freeze is sent
+   * right before a recall and unfreeze is sent redundantly afterwards.
+   * This freezes the camera's OWN output image momentarily by design - it
+   * is an operator-chosen visual effect, not a video-pipeline change.
+   */
+  pictureFreeze(on) {
+    return Buffer.from([0x81, 0x01, 0x04, 0x62, on ? 0x02 : 0x03, 0xff]);
   },
 };
 
