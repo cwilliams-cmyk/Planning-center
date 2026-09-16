@@ -1,12 +1,18 @@
 'use strict';
 
 /**
- * Auto-discovery of Hollyland Astra (and other VISCA-over-IP) cameras.
+ * Discovery of Hollyland Astra (and other VISCA-over-IP) cameras.
  *
  * Strategy: for every host on the local /24 subnet(s), send a VISCA version
  * inquiry to both the Sony framing port (52381) and the raw UDP port (1259).
  * Anything that answers on either port is a VISCA camera. Sony-port replies
  * are preferred when a camera answers on both.
+ *
+ * SAFETY: a scan is only ever run when the operator explicitly asks for one
+ * in Setup mode - never automatically, never on a timer, and never in Live
+ * Control mode (the production switch also carries live NDI video). The
+ * probes are tiny unicast UDP inquiries paced in small batches; there is no
+ * broadcast/multicast traffic and no NDI discovery involved.
  */
 
 const os = require('os');
@@ -54,9 +60,10 @@ function scan(subnets, timeoutMs = 2500) {
       const inq = cmd.versionInq();
       const sonyPacket = sonyWrap(inq, 1, 0x0110);
       let i = 1;
-      // Pace the sends so we don't overflow the socket buffer: 32 hosts per tick.
+      // Gentle pacing: 8 hosts per 50ms tick keeps the probe train far below
+      // anything that could matter next to video traffic.
       const interval = setInterval(() => {
-        for (let n = 0; n < 32 && i <= 254; n++, i++) {
+        for (let n = 0; n < 8 && i <= 254; n++, i++) {
           for (const net of nets) {
             const ip = `${net}.${i}`;
             socket.send(sonyPacket, SONY_PORT, ip, () => {});
@@ -64,13 +71,13 @@ function scan(subnets, timeoutMs = 2500) {
           }
         }
         if (i > 254) clearInterval(interval);
-      }, 20);
+      }, 50);
 
       setTimeout(() => {
         clearInterval(interval);
         try { socket.close(); } catch {}
         resolve([...found].map(([ip, protocol]) => ({ ip, protocol })));
-      }, timeoutMs + 254 / 32 * 20);
+      }, timeoutMs + Math.ceil(254 / 8) * 50);
     });
   });
 }

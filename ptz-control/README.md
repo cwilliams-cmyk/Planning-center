@@ -1,19 +1,31 @@
-# Astra PTZ Control
+# OrZ Control
 
-A multi-camera dashboard for **Hollyland Astra** PTZ cameras (and any other
-VISCA-over-IP camera). One browser window gives you:
+Production-grade PTZ camera control for **Hollyland Astra** (and other
+VISCA-over-IP) cameras, built for live church services and events. One
+window gives you a multiview of every camera and a unified control panel —
+designed so a volunteer can run it, and so it **cannot disturb the live NDI
+video** feeding a YoloBox Extreme or other recorder/switcher (see
+[docs/SAFETY.md](docs/SAFETY.md)).
 
-- **Auto-connect** — the server scans your local network for cameras on
-  startup (and every 5 minutes) by probing the VISCA-over-IP ports, and
-  remembers them in `cameras.json`.
-- **Multiview** — a live grid showing every camera at once (RTSP relayed to
-  the browser as MJPEG via ffmpeg).
-- **Unified PTZ controls** — one panel drives whichever camera you click,
-  with an **ALL** switch to broadcast a command (e.g. recall preset 1) to
-  every camera simultaneously.
-- **Image / exposure controls** — exposure mode (auto, manual, shutter or
-  iris priority, bright), iris/shutter/gain/brightness stepping, white
-  balance modes, and backlight compensation.
+## Highlights
+
+- **Two modes, enforced by the server** — *Live Control* (default; safe
+  control only, quiet on the network) and *Setup* (pre-service: scan,
+  add/edit cameras, edit presets).
+- **Bomb-proof motion** — per-camera command queues coalesce and rate-limit
+  input, stop commands jump the queue and are sent redundantly, and a
+  server-side motion watchdog halts any camera whose control session
+  vanishes mid-move.
+- **Resilient connections** — per-camera state (connected / intermittent /
+  connecting / offline), automatic recovery, exponential backoff with
+  jitter for offline cameras, staggered revalidation after Mac sleep/wake.
+  One camera's failure never affects another.
+- **First-class presets** — named per-camera presets with a separate Edit
+  mode, confirmations before overwriting, and one-click/1–9-key recall.
+- **Optional previews** — low-bandwidth RTSP *sub-stream* pulls, off by
+  default in Live Control; never required for control, never touching NDI.
+- **Diagnostics** — connection log, camera states, one-click "copy support
+  info".
 
 ## Download the Mac app (easiest)
 
@@ -24,53 +36,42 @@ Actions. Grab it from the repo's **Releases** page (release
 - Apple Silicon Mac (M1/M2/M3/M4, 2020+): `…-apple-silicon.dmg`
 - Intel Mac: `…-intel.dmg`
 
-Open the `.dmg`, drag **Astra PTZ Control** to **Applications**, then
+Open the `.dmg`, drag **OrZ Control** to **Applications**, then
 **right-click → Open → Open** on first launch (the app isn't notarized
 with Apple). If macOS refuses with a "damaged" warning, run once:
-`xattr -cr "/Applications/Astra PTZ Control.app"` and open again.
+`xattr -cr "/Applications/OrZ Control.app"` and open again.
 
 The app bundles everything — no browser, Terminal, Node, or ffmpeg needed.
 
 ## Or run from source
 
-Requires [Node.js](https://nodejs.org) 18+; video previews also want
+Requires [Node.js](https://nodejs.org) 18+; the optional previews also want
 [ffmpeg](https://ffmpeg.org) on your PATH (`brew install ffmpeg`). The
 computer must be on the same network/VLAN as the cameras.
 
-On a Mac, double-click **`Astra PTZ Control.command`** — it starts the
-server and opens the dashboard in your browser. Or from a terminal:
+On a Mac, double-click **`OrZ Control.command`** — it starts the server and
+opens the dashboard in your browser. Or from a terminal:
 
 ```sh
 cd ptz-control
 node server.js            # then open http://localhost:8300
+npm test                  # run the unit + integration test suite
 ```
 
 To develop on the Electron app itself: `npm install`, then `npm run app`
 (window mode) or `npm run dist` (build the .dmg locally).
 
-Options:
+## Using it
 
-```sh
-node server.js --port 9000     # different port
-node server.js --no-autoscan   # don't scan the network automatically
-```
+See **[docs/OPERATOR_GUIDE.md](docs/OPERATOR_GUIDE.md)** for the operator
+walkthrough (adding cameras, checking connection, PTZ, presets, recovery,
+diagnostics) and **[docs/SAFETY.md](docs/SAFETY.md)** for the
+non-disruption policy toward NDI/recording paths.
 
-The dashboard is served to any device on the network, so you can open it
-from a tablet at the tech booth: `http://<this-computer's-ip>:8300`.
-
-## Using the dashboard
-
-- **Click a camera tile** to select it — the control panel drives that camera.
-- **Hold** the D-pad / zoom / focus buttons to move; release to stop.
-- **Speed slider** sets pan/tilt/zoom speed (1–24).
-- **Presets 1–9**: click to recall. Tick **set mode**, then click a number to
-  save the camera's current position to that slot.
-- **ALL toggle**: commands go to every camera at once — handy for recalling a
-  service-wide preset or sending all cameras home.
-- **Keyboard**: arrow keys pan/tilt, `+`/`−` zoom, `1`–`9` recall presets,
-  `H` home.
-- **Scan network** re-probes the subnet; **+ Add camera** adds one by IP
-  (for cameras on another subnet).
+Quick version: start in **Setup** to scan/add and name your cameras and
+presets, then switch to **Live Control** for the service. Hold the D-pad /
+zoom / focus buttons to move (release = stop), click presets to recall,
+Space = stop everything, **Lock** freezes the controls.
 
 ## How it talks to the cameras
 
@@ -78,12 +79,12 @@ from a tablet at the tech booth: `http://<this-computer's-ip>:8300`.
 |---|---|---|
 | PTZ control | VISCA over IP (Sony framing) | UDP 52381 |
 | PTZ control (fallback) | VISCA over IP (raw) | UDP 1259 |
-| Video preview | RTSP → MJPEG via ffmpeg | `rtsp://<ip>:554/live/av0` |
+| Optional preview | RTSP sub stream → MJPEG via ffmpeg | `rtsp://<ip>:554/live/av1` |
 
-Discovery sends a VISCA *version inquiry* to every address on the local /24
-subnet on both ports; anything that replies is added as a camera. If a
-camera uses a nonstandard RTSP path, edit its `rtsp` field in
-`cameras.json` (created next to `server.js` on first save).
+Control health is checked with a tiny VISCA version inquiry — never by
+touching video. Discovery (Setup mode only, manual) probes the local /24
+with paced unicast inquiries on both control ports. If a camera uses a
+nonstandard RTSP path, set its `rtsp` field via the API or `cameras.json`.
 
 ## Camera setup tips (Astra P1)
 

@@ -1,0 +1,82 @@
+# OrZ Control — Operator Guide
+
+A quick guide for camera operators. You cannot break the live video from
+this app: it sends camera-*control* commands only, and the video feeding
+the YoloBox/recorder continues on its own even if this app is closed.
+
+## The two modes (top of the window)
+
+- **Live Control** — what you use during a service. Only safe operations
+  are possible: move cameras, zoom, focus, recall presets, gentle image
+  tweaks. You cannot accidentally delete a camera or overwrite a preset.
+- **Setup** — before the service. Scan for cameras, add/rename/remove
+  cameras, and edit presets. The app never switches to Setup by itself.
+
+## Adding a camera (before service)
+
+1. Click **Setup**.
+2. Click **Scan network** — cameras on the same network appear by
+   themselves — or click **+ Add camera** and type the camera's IP address.
+3. Rename it something obvious (✎ on its tile): "Stage Left", "Balcony".
+4. Click **Live Control** when you're done.
+
+Cameras are remembered permanently, even while they're powered off.
+
+## Is my camera connected?
+
+Each camera tile has a colored dot and a status line:
+
+- 🟢 **Connected** — you're in control.
+- 🟡 **Intermittent** — control may lag for a moment; video is unaffected.
+- 🟡 **Connecting…** (pulsing) — the app is reaching out to the camera.
+- 🔴 **Control offline** — the app can't reach the camera's controls.
+  **The camera's video keeps going to the recorder on its own.** The app
+  reconnects automatically when the camera is reachable again — there is
+  nothing you need to click.
+
+## Moving the camera
+
+1. Click the camera's tile (blue border = selected).
+2. Hold the arrow pad to pan/tilt — **release to stop**. Same for Zoom −/+
+   and Focus −/+.
+3. Pick **Slow / Normal / Fast** for movement speed. Slow is smoothest on
+   a live shot.
+4. Keyboard: arrow keys move, `+`/`−` zoom, `H` home, `1`–`9` presets, and
+   **Space stops every camera immediately**.
+
+Focus: leave **Auto** on unless you have a reason not to. If you switch to
+**Manual**, a yellow note reminds you the camera will not refocus by itself.
+
+## Presets
+
+- **Recall** (during service): click a preset button — the camera moves
+  there. That's it; recalling is always safe.
+- **Save/rename** (before service): in **Setup** mode, tick **Edit
+  presets**. Clicking a preset now saves the camera's *current* position
+  into it (it asks first). ✎ renames a preset — use names volunteers
+  recognize: *Wide Stage, Pulpit, Worship Leader, Keys, Drums, Baptism,
+  Congregation, Sermon Two-Shot*.
+- Each camera has its own presets 1–9.
+
+## If something looks stuck
+
+- A red **Control offline** tile is not an emergency: video is unaffected.
+  Check the camera's power and network cable; the app reconnects on its
+  own.
+- **Lock** (top right) freezes all controls while keeping status visible —
+  useful if you need to step away.
+- Worried a camera is moving when it shouldn't? Press **Space** — stop is
+  sent to every camera.
+
+## Previews
+
+The small video tiles are optional, low-bandwidth previews, separate from
+the recording feed. They're off by default during Live Control to keep the
+production network quiet; turn them on with the **Previews** checkbox if
+you want them. Control works fully without them.
+
+## Diagnostics
+
+Click **Diagnostics** for each camera's connection state and a log of
+recent events. **Copy support info** puts a text report on the clipboard —
+paste it into a message when asking for help. It contains no passwords.

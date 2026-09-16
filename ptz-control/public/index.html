@@ -3,30 +3,47 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Astra PTZ Control</title>
+<title>OrZ Control</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header>
-  <h1>Astra PTZ Control</h1>
+  <h1>OrZ Control</h1>
+
+  <div class="mode-switch" role="group" aria-label="Operating mode">
+    <button id="mode-live" class="mode-btn" aria-pressed="true"
+      title="Safe for use while recording/streaming: camera-control commands only.">Live Control</button>
+    <button id="mode-setup" class="mode-btn"
+      title="Pre-service setup: scan, add/edit cameras, edit presets.">Setup</button>
+  </div>
+
   <div class="header-actions">
-    <span id="scan-status"></span>
-    <button id="btn-scan" title="Probe the local network for VISCA cameras">Scan network</button>
-    <button id="btn-add" title="Add a camera by IP address">+ Add camera</button>
+    <span id="scan-status" aria-live="polite"></span>
+    <button id="btn-lock" title="Lock all camera controls to prevent accidental movement. Status stays visible.">🔓 Lock</button>
+    <label class="preview-toggle" title="Optional low-bandwidth previews pulled from each camera's RTSP sub stream. Fully independent of NDI video output and never required for control.">
+      <input type="checkbox" id="preview-toggle"> Previews
+    </label>
+    <button id="btn-scan" class="setup-only" title="Probe the local network for VISCA cameras (Setup mode only)">Scan network</button>
+    <button id="btn-add" class="setup-only" title="Add a camera by IP address">+ Add camera</button>
+    <button id="btn-diag" title="Connection log and support info">Diagnostics</button>
   </div>
 </header>
 
+<div id="mode-note" class="mode-note" aria-live="polite">
+  Live Control mode sends camera-control commands only. It does not modify NDI video settings or recording connections.
+</div>
+
 <main>
-  <!-- Multiview: every camera, live -->
+  <!-- Multiview: every camera -->
   <section id="multiview">
     <div id="grid" class="grid"></div>
     <p id="empty-hint" class="hint" hidden>
-      No cameras yet. Power on your Astra cameras (same network as this computer),
-      then click <b>Scan network</b> — they'll be found automatically.
+      No cameras yet. Switch to <b>Setup</b> mode, then use <b>Scan network</b>
+      (with the cameras powered on) or <b>+ Add camera</b> to enter an IP address.
+      Scanning is kept out of Live Control mode to protect the production network.
     </p>
     <p id="ffmpeg-hint" class="hint warn" hidden>
-      ffmpeg was not found on this computer, so video previews are disabled.
-      PTZ control still works. Install ffmpeg and restart the server to see video.
+      ffmpeg is unavailable, so the optional previews are off. Camera control is not affected.
     </p>
   </section>
 
@@ -35,49 +52,70 @@
     <div class="target-row">
       <span class="label">Controlling</span>
       <div id="target-name" class="target-name">—</div>
-      <label class="all-toggle" title="Send commands to every camera at once">
+      <label class="all-toggle" title="Send commands to every camera at once (movement, home, preset recall).">
         <input type="checkbox" id="all-toggle"> ALL
       </label>
     </div>
+    <div id="target-status" class="target-status"></div>
+
+    <div id="lock-banner" class="lock-banner" hidden>
+      Controls are locked. Camera status stays live; press Unlock to resume operating.
+    </div>
 
     <div class="dpad">
-      <button data-dir="upleft">↖</button>
-      <button data-dir="up">↑</button>
-      <button data-dir="upright">↗</button>
-      <button data-dir="left">←</button>
+      <button data-dir="upleft" aria-label="Pan up-left">↖</button>
+      <button data-dir="up" aria-label="Tilt up">↑</button>
+      <button data-dir="upright" aria-label="Pan up-right">↗</button>
+      <button data-dir="left" aria-label="Pan left">←</button>
       <button id="btn-home" title="Return to home position">⌂</button>
-      <button data-dir="right">→</button>
-      <button data-dir="downleft">↙</button>
-      <button data-dir="down">↓</button>
-      <button data-dir="downright">↘</button>
+      <button data-dir="right" aria-label="Pan right">→</button>
+      <button data-dir="downleft" aria-label="Pan down-left">↙</button>
+      <button data-dir="down" aria-label="Tilt down">↓</button>
+      <button data-dir="downright" aria-label="Pan down-right">↘</button>
     </div>
 
     <div class="rockers">
       <div class="rocker">
         <span class="label">Zoom</span>
-        <button data-zoom="wide">−</button>
-        <button data-zoom="tele">+</button>
+        <button data-zoom="wide" aria-label="Zoom out">−</button>
+        <button data-zoom="tele" aria-label="Zoom in">+</button>
       </div>
       <div class="rocker">
         <span class="label">Focus</span>
-        <button data-focus="near">−</button>
-        <button data-focus="far">+</button>
-        <button id="btn-af" title="Auto focus">AF</button>
+        <button data-focus="near" aria-label="Focus near">−</button>
+        <button data-focus="far" aria-label="Focus far">+</button>
       </div>
     </div>
 
+    <div class="focus-mode-row">
+      <span class="label">Focus mode</span>
+      <div class="mode-switch small" role="group" aria-label="Focus mode">
+        <button id="btn-af" class="mode-btn" aria-pressed="true"
+          title="Camera keeps focus automatically (recommended for live use)">Auto</button>
+        <button id="btn-mf" class="mode-btn"
+          title="Manual focus: the − / + focus buttons adjust focus. The camera will NOT refocus on its own.">Manual</button>
+      </div>
+    </div>
+    <p id="mf-warning" class="hint tiny warn" hidden>
+      Manual focus is active — this camera will not refocus on its own.
+    </p>
+
     <div class="speed-row">
       <span class="label">Speed</span>
-      <input type="range" id="speed" min="1" max="24" value="12">
-      <span id="speed-val">12</span>
+      <div class="mode-switch small" role="group" aria-label="Movement speed">
+        <button class="mode-btn speed-btn" data-speed="6">Slow</button>
+        <button class="mode-btn speed-btn" data-speed="12" aria-pressed="true">Normal</button>
+        <button class="mode-btn speed-btn" data-speed="20">Fast</button>
+      </div>
     </div>
 
     <details class="image-panel" id="image-panel">
-      <summary><span class="label">Image / Exposure</span></summary>
+      <summary><span class="label">Image / Exposure</span>
+        <span class="tiny-note">operator-initiated only</span></summary>
 
       <div class="image-row">
         <span>Exposure</span>
-        <select id="exposure-mode">
+        <select id="exposure-mode" title="Auto is safest during a service. Manual/priority modes enable the steppers below.">
           <option value="auto">Auto</option>
           <option value="manual">Manual</option>
           <option value="shutter">Shutter priority</option>
@@ -86,24 +124,24 @@
         </select>
       </div>
 
-      <div class="image-row"><span>Iris</span>
+      <div class="image-row"><span>Iris <small>(brightness via lens)</small></span>
         <div class="steppers" data-what="iris">
-          <button data-step="down">−</button><button data-step="reset">•</button><button data-step="up">+</button>
+          <button data-step="down">−</button><button data-step="reset" title="Reset to default">•</button><button data-step="up">+</button>
         </div>
       </div>
-      <div class="image-row"><span>Shutter</span>
+      <div class="image-row"><span>Shutter <small>(motion blur)</small></span>
         <div class="steppers" data-what="shutter">
-          <button data-step="down">−</button><button data-step="reset">•</button><button data-step="up">+</button>
+          <button data-step="down">−</button><button data-step="reset" title="Reset to default">•</button><button data-step="up">+</button>
         </div>
       </div>
-      <div class="image-row"><span>Gain</span>
+      <div class="image-row"><span>Gain <small>(low-light noise)</small></span>
         <div class="steppers" data-what="gain">
-          <button data-step="down">−</button><button data-step="reset">•</button><button data-step="up">+</button>
+          <button data-step="down">−</button><button data-step="reset" title="Reset to default">•</button><button data-step="up">+</button>
         </div>
       </div>
       <div class="image-row"><span>Brightness</span>
         <div class="steppers" data-what="expcomp">
-          <button data-step="down">−</button><button data-step="reset">•</button><button data-step="up">+</button>
+          <button data-step="down">−</button><button data-step="reset" title="Reset to default">•</button><button data-step="up">+</button>
         </div>
       </div>
 
@@ -123,25 +161,43 @@
         <input type="checkbox" id="backlight">
       </div>
 
-      <p class="hint tiny">−/+ steps apply in the matching exposure mode
-        (e.g. iris steps need Manual or Iris priority). • resets to default.</p>
+      <p class="hint tiny">Adjustments apply to the selected camera and are
+        visible on the live output — make them gently. −/+ steps require the
+        matching exposure mode. These are camera image settings only; video
+        output and recording are never touched.</p>
     </details>
 
     <div class="presets">
       <div class="presets-head">
         <span class="label">Presets</span>
-        <label title="While on, pressing a preset saves the current position to it">
-          <input type="checkbox" id="preset-set-mode"> set mode
+        <label class="setup-only edit-presets-label" title="Edit mode: click a preset to save the camera's CURRENT position into it, or use ✎ to rename. Available in Setup mode.">
+          <input type="checkbox" id="preset-edit-mode"> Edit presets
         </label>
       </div>
       <div class="preset-grid" id="preset-grid"></div>
+      <p class="hint tiny" id="preset-hint">Click a preset to recall it. Keyboard: 1–9.</p>
     </div>
 
     <p class="hint keys">
-      Keyboard: arrows = pan/tilt &nbsp; +/− = zoom &nbsp; 1–9 = recall preset &nbsp; H = home
+      Keyboard: arrows = pan/tilt &nbsp; +/− = zoom &nbsp; 1–9 = presets &nbsp; H = home &nbsp; Space = stop all
     </p>
   </aside>
 </main>
+
+<!-- Diagnostics drawer -->
+<div id="diag-overlay" hidden>
+  <div id="diag-panel" role="dialog" aria-label="Diagnostics">
+    <div class="diag-head">
+      <h2>Diagnostics</h2>
+      <button id="diag-copy" title="Copy support info to the clipboard">Copy support info</button>
+      <button id="diag-close" aria-label="Close">✕</button>
+    </div>
+    <div id="diag-summary"></div>
+    <pre id="diag-log" aria-label="Recent events"></pre>
+  </div>
+</div>
+
+<div id="toast" hidden></div>
 
 <script src="app.js"></script>
 </body>

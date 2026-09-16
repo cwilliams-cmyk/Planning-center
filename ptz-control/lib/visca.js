@@ -7,6 +7,27 @@
  *  - "sony"  : Sony VISCA-over-IP framing on port 52381 (Astra default).
  *              Each packet gets an 8-byte header: payload type, length, sequence.
  *  - "raw"   : Bare VISCA bytes on port 1259 (Astra's plain UDP port).
+ *
+ * ============================ SAFETY BOUNDARY ============================
+ * This module is the ONLY place OrZ Control builds camera commands, and it
+ * deliberately implements control-safe commands only:
+ *
+ *   SAFE LIVE CONTROL (allowed in Live Control mode):
+ *     pan/tilt drive + stop, zoom, focus, autofocus mode, preset recall,
+ *     home, version inquiry (used as a lightweight health check)
+ *   ADVANCED IMAGE / SHADING (operator-initiated only):
+ *     exposure mode, iris/shutter/gain/brightness steps, exposure comp,
+ *     white balance modes, one-push WB, backlight compensation
+ *   PRESET SAVE: only from Edit Presets (Setup mode)
+ *
+ * There are intentionally NO commands here that touch the camera's video
+ * pipeline or platform: no NDI/RTSP/SRT/stream configuration, no output,
+ * resolution, frame-rate, bitrate or encoder changes, no IP/network
+ * settings, no reboot/reset/power/firmware operations. Adding any such
+ * command to the live path would violate the app's non-disruption policy
+ * (see docs/SAFETY.md) - the NDI feed to the YoloBox Extreme must keep
+ * running no matter what this app does. Do not add them.
+ * =========================================================================
  */
 
 const dgram = require('dgram');

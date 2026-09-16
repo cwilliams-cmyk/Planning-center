@@ -1,19 +1,29 @@
 'use strict';
 
 /**
- * RTSP -> MJPEG relay so camera video can render in a plain <img> tag.
+ * Optional RTSP -> MJPEG preview relay.
  *
- * One ffmpeg process per camera, shared by every connected browser client.
- * The process starts on the first viewer and is torn down a few seconds
- * after the last viewer disconnects.
+ * SAFETY: previews are strictly optional and read-only. This module PULLS a
+ * copy of the camera's RTSP stream; it never configures, restarts, or
+ * probes the camera's video services, and it never touches NDI. Camera
+ * control works fully with previews disabled, and stopping a preview only
+ * closes our own ffmpeg process. To stay light on the production network
+ * (which also carries live NDI to the YoloBox Extreme), the relay uses the
+ * camera's LOW-BANDWIDTH SUB STREAM by default:
  *
- * Astra P1 main stream: rtsp://<ip>:554/live/av0  (sub stream: /live/av1)
+ *   Astra P1 sub stream:  rtsp://<ip>:554/live/av1   (default here)
+ *   Astra P1 main stream: rtsp://<ip>:554/live/av0   (fallback only)
+ *
+ * One ffmpeg process per camera, shared by every connected viewer, started
+ * on the first viewer and torn down shortly after the last one leaves.
  */
 
 const fs = require('fs');
 const { spawn, spawnSync } = require('child_process');
 
 const BOUNDARY = 'ffmpeg'; // ffmpeg's mpjpeg muxer default boundary
+const SUB_STREAM_PATH = '/live/av1';
+const MAIN_STREAM_PATH = '/live/av0';
 
 /** Prefer a bundled ffmpeg-static binary (Electron app), else the system one. */
 function resolveFfmpeg() {
@@ -39,14 +49,17 @@ function ffmpegAvailable(bin) {
 }
 
 class StreamHub {
-  constructor() {
-    this.relays = new Map(); // ip -> { proc, clients:Set<res>, stopTimer }
+  constructor({ log } = {}) {
+    this.relays = new Map(); // ip -> { proc, clients:Set<res>, stopTimer, failures, useMain }
     this.ffmpeg = resolveFfmpeg();
     this.available = ffmpegAvailable(this.ffmpeg);
+    this.log = log || { info() {}, warn() {} };
   }
 
-  rtspUrl(camera) {
-    return camera.rtsp || `rtsp://${camera.ip}:554/live/av0`;
+  rtspUrl(camera, relay) {
+    if (camera.rtsp) return camera.rtsp; // explicit per-camera override
+    const streamPath = relay && relay.useMain ? MAIN_STREAM_PATH : SUB_STREAM_PATH;
+    return `rtsp://${camera.ip}:554${streamPath}`;
   }
 
   /** Attach an HTTP response as an MJPEG viewer of the camera. */
@@ -79,24 +92,26 @@ class StreamHub {
     let relay = this.relays.get(camera.ip);
     if (relay && relay.proc) return relay;
 
-    relay = relay || { proc: null, clients: new Set(), stopTimer: null };
+    relay = relay || { proc: null, clients: new Set(), stopTimer: null, failures: 0, useMain: false };
     this.relays.set(camera.ip, relay);
 
     const args = [
       '-hide_banner', '-loglevel', 'error',
       '-rtsp_transport', 'tcp',
-      '-i', this.rtspUrl(camera),
+      '-i', this.rtspUrl(camera, relay),
       '-an',
-      '-vf', 'scale=640:-2',
-      '-r', '12',
-      '-q:v', '7',
+      '-vf', 'scale=480:-2',
+      '-r', '10',
+      '-q:v', '8',
       '-f', 'mpjpeg',
       'pipe:1',
     ];
+    const startedAt = Date.now();
     const proc = spawn(this.ffmpeg, args, { stdio: ['ignore', 'pipe', 'ignore'] });
     relay.proc = proc;
 
     proc.stdout.on('data', (chunk) => {
+      relay.failures = 0; // producing frames = healthy
       for (const res of relay.clients) {
         if (!res.writableEnded) res.write(chunk);
       }
@@ -104,8 +119,17 @@ class StreamHub {
     proc.on('exit', () => {
       if (relay.proc !== proc) return;
       relay.proc = null;
+      // A quick exit usually means the RTSP path was refused. After two
+      // rapid failures on the default sub stream, fall back to the main
+      // stream path once (some firmware exposes only av0).
+      if (Date.now() - startedAt < 5000) {
+        relay.failures += 1;
+        if (relay.failures === 2 && !camera.rtsp && !relay.useMain) {
+          relay.useMain = true;
+          this.log.info('preview_fallback_main_stream', { camera: camera.ip });
+        }
+      }
       if (relay.clients.size > 0) {
-        // Camera dropped or stream hiccup: retry while viewers remain.
         setTimeout(() => {
           if (relay.clients.size > 0 && !relay.proc) this._relayFor(camera);
         }, 3000);

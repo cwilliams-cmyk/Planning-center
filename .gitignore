@@ -10,5 +10,6 @@ SimplePresenter/Info.plist
 
 # PTZ control app runtime config (per-installation camera list)
 ptz-control/cameras.json
+ptz-control/cameras.json.corrupt-*
 ptz-control/node_modules/
 ptz-control/dist/

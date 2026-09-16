@@ -73,22 +73,24 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ptz-control-latest
-          name: Astra PTZ Control (latest build)
+          name: OrZ Control (latest build)
           body: |
-            Desktop app for controlling Hollyland Astra PTZ cameras.
+            OrZ Control - production desktop app for Hollyland Astra PTZ cameras.
 
             **Which file do I download?**
             - Mac with Apple Silicon (M1/M2/M3/M4, 2020 or newer): `*-apple-silicon.dmg`
             - Older Intel Mac: `*-intel.dmg`
 
-            **Install:** open the `.dmg`, drag **Astra PTZ Control** into
+            **Install:** open the `.dmg`, drag **OrZ Control** into
             **Applications**. The app is not notarized with Apple, so the
             first launch needs one extra step: **right-click the app →
             Open → Open**. If macOS still refuses ("damaged" or no Open
             button), run this once in Terminal and try again:
-            `xattr -cr "/Applications/Astra PTZ Control.app"`
+            `xattr -cr "/Applications/OrZ Control.app"`
 
-            After that it opens like any other app, finds your cameras
-            automatically, and needs no browser, Terminal, Node, or ffmpeg.
+            It opens like any other app and needs no browser, Terminal,
+            Node, or ffmpeg. It starts in Live Control mode (safe,
+            control-only); switch to Setup mode before service to scan for
+            cameras and edit presets.
           files: dist/*
           prerelease: false
