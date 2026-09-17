@@ -12,7 +12,7 @@
 
 const path = require('path');
 const fs = require('fs');
-const { app, BrowserWindow, shell, dialog, powerMonitor } = require('electron');
+const { app, BrowserWindow, shell, dialog, powerMonitor, nativeTheme } = require('electron');
 const { startServer, shutdown, onSuspend, onResume } = require('../server');
 
 let win = null;
@@ -47,7 +47,9 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     title: 'PTZ Control',
-    backgroundColor: '#101318',
+    // Match the page's light/dark palette so the window never flashes the
+    // wrong color behind the UI.
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#101318' : '#f2f4f8',
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

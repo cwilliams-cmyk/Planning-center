@@ -1,6 +1,6 @@
 {
   "name": "ptz-control",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "PTZ Control - production PTZ camera control for Hollyland Astra (VISCA over IP) cameras",
   "main": "electron/main.js",
   "scripts": {

@@ -387,13 +387,15 @@ body.tracking-active #btn-home { opacity: .35; }
 #diag-summary { font-size: 13px; color: var(--muted); }
 #diag-summary ul { margin: 6px 0; padding-left: 18px; }
 #diag-log {
-  background: #0b0e12;
+  background: var(--panel-2);
+  color: var(--text);
   border: 1px solid var(--border);
   border-radius: 9px;
   padding: 10px;
   font: 11px/1.5 ui-monospace, Menlo, monospace;
   overflow: auto;
   flex: 1;
+  min-height: 120px;
   white-space: pre-wrap;
   word-break: break-word;
 }
