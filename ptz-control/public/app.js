@@ -780,6 +780,9 @@ $('#diag-close').addEventListener('click', () => { $('#diag-overlay').hidden = t
 $('#diag-overlay').addEventListener('click', (e) => {
   if (e.target.id === 'diag-overlay') $('#diag-overlay').hidden = true;
 });
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('#diag-overlay').hidden) $('#diag-overlay').hidden = true;
+});
 $('#diag-copy').addEventListener('click', async () => {
   try {
     await navigator.clipboard.writeText(diagText);

@@ -31,6 +31,10 @@
 
 * { box-sizing: border-box; }
 
+/* The hidden attribute must always win, even over display:flex rules
+   (otherwise overlays like Diagnostics get stuck permanently visible). */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   background: var(--bg);
